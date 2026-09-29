@@ -1,0 +1,130 @@
+# Paramètres du radar : sources, poids, seuils. Les pondérations sont un point de départ
+# à calibrer par backtest (cf. cahier des charges).
+
+timezone: "Europe/Paris"
+db_path: "data/radar.db"
+
+# Poids par niveau de source (w_source) : phase 1 = 3, phase 2 = 1,5, phase 3 = 1, suspect = 0.
+tier_weights:
+  niche: 3.0        # phase 1 : GitHub, Farcaster, blogs de recherche, forums de gouvernance
+  influencer: 1.5   # phase 2 : médias crypto spécialisés (en attendant X)
+  retail: 1.0       # phase 3 : Reddit
+  mainstream: 1.0   # phase 4 : presse généraliste (sert d'alarme de sommet)
+  suspect: 0.0
+
+# Poids par type de post (tag LLM). Seuls analyse et annonce comptent plein.
+post_type_weights:
+  analysis: 1.0
+  announcement: 1.0
+  promotion: 0.3
+  spam: 0.0
+  unclassified: 0.7   # fallback mots-clés quand l'API Claude n'est pas disponible
+
+# Filtres anti-bruit au niveau post / auteur.
+noise:
+  min_account_age_days: 90          # compte plus jeune -> poids 0
+  reddit_min_karma: 20              # karma total sous ce seuil -> poids 0.5
+  farcaster_min_follower_ratio: 0.05  # followers/following sous ce ratio (avec following > 1000) -> poids 0
+  promo_weight: 0.5                 # lien de parrainage / sponsorisé / "NFA + ticker" -> poids multiplié
+  duplicate_window_minutes: 60      # textes quasi identiques de plusieurs comptes en < 1 h -> comptés une fois
+  duplicate_similarity: 0.85        # similarité Jaccard (shingles de 3 mots)
+  github_zero_star_weight: 0.5      # repo sans étoile : poids réduit (recalculé à chaque passage)
+
+# Classification LLM (modèle léger, par lots, posts pré-filtrés par mots-clés).
+llm:
+  model: "claude-haiku-4-5"
+  batch_size: 25
+  max_posts_per_run: 400            # garde-fou de coût par exécution
+  max_chars_per_post: 800
+
+collectors:
+  reddit:
+    enabled: true
+    subreddits: [CryptoCurrency, altcoin, ethereum, ethfinance, solana, CryptoTechnology,
+                 defi, cosmosnetwork, sui, avax, cardano, dot, arbitrum, Bitcoin]
+    tier: retail
+    pages_per_subreddit: 3          # 100 posts par page, arrêt dès qu'on retombe sur du connu
+    max_author_lookups: 80          # appels /user/{name}/about par exécution (âge du compte, karma)
+
+  github:
+    enabled: true
+    tier: niche
+    lookback_days: 7                # repos créés sur les 7 derniers jours (ré-upsert des étoiles)
+    per_query: 50
+    extra_queries: ["topic:web3 topic:ai-agents", "topic:solana topic:ai", "topic:ethereum topic:restaking"]
+    max_owner_lookups: 60
+
+  farcaster:
+    enabled: true                   # sauté automatiquement si NEYNAR_API_KEY absent ou plan sans accès
+    tier: niche
+    channels: [ethereum, base, founders, dev, defi, ai, solana]
+    limit_per_channel: 100
+
+  rss:
+    enabled: true
+    feeds:
+      # --- Phase 1 : recherche, fonds, forums (URLs à vérifier au premier lancement)
+      - {name: "a16z crypto", url: "https://a16zcrypto.com/feed/", tier: niche}
+      - {name: "Paradigm", url: "https://www.paradigm.xyz/feed.xml", tier: niche}
+      - {name: "Vitalik", url: "https://vitalik.eth.limo/feed.xml", tier: niche}
+      - {name: "Variant", url: "https://blog.variant.fund/rss", tier: niche}
+      - {name: "Galaxy Research", url: "https://www.galaxy.com/insights/feed/", tier: niche}
+      - {name: "ethresear.ch", url: "https://ethresear.ch/latest.rss", tier: niche}
+      - {name: "Ethereum Magicians", url: "https://ethereum-magicians.org/latest.rss", tier: niche}
+      - {name: "Flashbots forum", url: "https://collective.flashbots.net/latest.rss", tier: niche}
+      - {name: "Uniswap gov", url: "https://gov.uniswap.org/latest.rss", tier: niche}
+      - {name: "Arbitrum gov", url: "https://forum.arbitrum.foundation/latest.rss", tier: niche}
+      - {name: "Aave gov", url: "https://governance.aave.com/latest.rss", tier: niche}
+      - {name: "Lido research", url: "https://research.lido.fi/latest.rss", tier: niche}
+      # --- Phase 2/3 : médias crypto spécialisés
+      - {name: "The Defiant", url: "https://thedefiant.io/api/feed", tier: influencer}
+      - {name: "Decrypt", url: "https://decrypt.co/feed", tier: influencer}
+      - {name: "CoinDesk", url: "https://www.coindesk.com/arc/outboundfeeds/rss/", tier: influencer}
+      - {name: "Cointelegraph", url: "https://cointelegraph.com/rss", tier: influencer}
+      # --- Phase 4 : presse généraliste (alarme de sommet)
+      - {name: "BBC Tech", url: "https://feeds.bbci.co.uk/news/technology/rss.xml", tier: mainstream}
+      - {name: "Guardian Tech", url: "https://www.theguardian.com/technology/rss", tier: mainstream}
+      - {name: "NYT Tech", url: "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml", tier: mainstream}
+      - {name: "Le Monde Pixels", url: "https://www.lemonde.fr/pixels/rss_full.xml", tier: mainstream}
+
+  coingecko:
+    enabled: true                   # API publique ; COINGECKO_API_KEY (plan Demo gratuit) recommandé
+  defillama:
+    enabled: true
+
+# Scoring quotidien.
+scoring:
+  volume_floor: 1.0                 # MA30 des mentions pondérées sous ce plancher -> narratif ignoré
+  concentration_top_n: 5
+  concentration_threshold: 0.40     # 5 comptes > 40 % des mentions -> pénalité
+  min_history_days: 14              # historique minimal pour des z-scores fiables
+  zscore_window_days: 90
+  weights: {V: 0.30, A: 0.15, B: 0.20, Q: 0.20, D: 0.15}
+  penalties:
+    single_token: 0.5               # hausse portée par un seul token -> "token chaud"
+    single_token_share: 0.6         # part des mentions de tokens portée par un seul token
+    no_niche_source: 0.5            # aucune source phase 1 sur 7 j
+  phase:
+    niche_share_min: 0.50           # Q > 50 % -> phase 1 possible
+    reddit_spike_ratio: 2.0         # MA7/MA30 des mentions Reddit >= 2 -> pic Reddit
+    reddit_spike_min_daily: 3.0     # ... et au moins 3 mentions Reddit/jour en moyenne 7 j
+    reddit_low_share: 0.35          # part Reddit des mentions pondérées sous ce seuil = "faible"
+    mainstream_min_mentions_7d: 3   # >= 3 articles presse généraliste sur 7 j -> phase 4
+  token_sov_alarm: 0.01             # part de voix d'un token > 1 % -> alarme de sommet local
+
+alerts:
+  top_decile: 0.90                  # score dans le décile supérieur de l'historique du narratif
+  min_history_for_decile: 20
+  fallback_min_score: 1.5           # avant 20 jours d'historique : seuil absolu
+  max_per_day: 2
+
+# Filtre d'exclusion des tokens (avant toute mise en avant).
+token_filter:
+  min_circulating_ratio: 0.20
+  min_volume_usd: 250000
+  min_volume_to_mcap: 0.01
+
+email:
+  daily_window: ["07:15", "12:00"]   # heure de Paris ; cron doublé été/hiver + anti-doublon
+  weekly_window: ["07:45", "13:00"]
+  top_n: 10

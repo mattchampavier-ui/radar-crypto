@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Research blog</title><link>https://example.org</link>
+<item><title>The case for verifiable inference</title><link>https://example.org/p/1</link><guid>https://example.org/p/1</guid>
+<pubDate>Sun, 27 Sep 2026 08:00:00 GMT</pubDate><description>&lt;p&gt;Decentralized AI needs &lt;b&gt;zkML&lt;/b&gt;.&lt;/p&gt;</description><author>researcher@example.org (Jane)</author></item>
+<item><title>Quarterly letter</title><link>https://example.org/p/2</link><guid>https://example.org/p/2</guid>
+<pubDate>Mon, 28 Sep 2026 08:00:00 GMT</pubDate><description>Macro thoughts.</description></item>
+</channel></rss>

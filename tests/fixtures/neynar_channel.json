@@ -1,0 +1,4 @@
+{"casts": [
+ {"hash": "0xaaa111bbb222", "author": {"fid": 1, "username": "vbuterin", "follower_count": 400000, "following_count": 100, "experimental": {"neynar_user_score": 0.99}}, "text": "Interesting new based rollup designs popping up", "timestamp": "2026-09-28T12:00:00.000Z", "reactions": {"likes_count": 500, "recasts_count": 40}, "replies": {"count": 30}, "channel": {"id": "ethereum"}},
+ {"hash": "0xccc333ddd444", "author": {"fid": 2, "username": "spammer", "follower_count": 3, "following_count": 5000}, "text": "memecoin 100x NFA $PEPE", "timestamp": "2026-09-28T13:00:00.000Z", "reactions": {"likes_count": 0, "recasts_count": 0}, "replies": {"count": 0}, "channel": {"id": "ethereum"}}
+], "next": {"cursor": null}}

@@ -1,0 +1,123 @@
+# Taxonomie des narratifs suivis par le radar.
+#
+# Pour chaque narratif :
+#   keywords           : mots-clés du pré-filtre (insensibles à la casse, bornes de mots).
+#                        Un post doit contenir au moins un mot-clé d'un narratif pour être
+#                        envoyé au LLM. Le LLM confirme ensuite (ou non) le rattachement.
+#   coingecko_categories : ids de catégories CoinGecko (GET /coins/categories/list)
+#                        utilisés pour le contrôle de prix et la détection "trending".
+#   defillama_categories : catégories DefiLlama (champ "category" de /protocols) pour TVL/revenus.
+#   tokens             : panier de tokens rattachés (id CoinGecko + symbole). Liste de départ
+#                        À VALIDER : le doc indique "à constituer".
+#   alarm_only         : true = suivi en alarme seulement (pas d'alerte d'entrée).
+#   github_queries     : (optionnel) requêtes GitHub explicites. Par défaut = les mots-clés.
+#                        Utile quand un mot-clé est trop générique hors crypto ("AI agents").
+#
+# Ajouter un narratif = ajouter un bloc ici. Aucun code à modifier.
+
+narratives:
+  agentic_ai:
+    label: "IA agentique"
+    keywords: ["AI agents", "AI agent", "agentic", "autonomous agents", "autonomous agent",
+               "onchain agent", "agent framework", "agent launchpad", "x402"]
+    github_queries: ['"AI agent" crypto', '"AI agent" web3', '"AI agent" solana', '"AI agent" onchain',
+                     '"agentic" blockchain', 'x402', '"agent launchpad"']
+    coingecko_categories: ["ai-agents"]
+    defillama_categories: []
+    tokens:
+      - {id: virtual-protocol, symbol: VIRTUAL}
+      - {id: ai16z, symbol: AI16Z}
+      - {id: aixbt, symbol: AIXBT}
+
+  decentralized_ai:
+    label: "IA décentralisée / calcul"
+    keywords: ["decentralized AI", "decentralised AI", "GPU network", "decentralized compute",
+               "inference network", "onchain inference", "verifiable inference", "zkML", "DeAI"]
+    github_queries: ['"decentralized AI"', '"GPU network" blockchain', '"decentralized compute"',
+                     '"verifiable inference"', 'zkML', 'DeAI']
+    coingecko_categories: ["artificial-intelligence"]
+    defillama_categories: []
+    tokens:
+      - {id: bittensor, symbol: TAO}
+      - {id: render-token, symbol: RENDER}
+      - {id: akash-network, symbol: AKT}
+      - {id: io-net, symbol: IO}
+
+  rwa:
+    label: "Actifs réels tokenisés (RWA)"
+    keywords: ["RWA", "RWAs", "real world assets", "real-world assets", "tokenized treasuries",
+               "tokenised treasuries", "tokenized stocks", "tokenized equities", "onchain credit",
+               "private credit", "tokenization"]
+    coingecko_categories: ["real-world-assets-rwa"]
+    defillama_categories: ["RWA", "RWA Lending"]
+    tokens:
+      - {id: ondo-finance, symbol: ONDO}
+      - {id: centrifuge, symbol: CFG}
+      - {id: plume, symbol: PLUME}
+
+  depin:
+    label: "Infrastructures physiques (DePIN)"
+    keywords: ["DePIN", "decentralized wireless", "decentralized physical infrastructure",
+               "sensor network", "proof of coverage", "DeWi"]
+    coingecko_categories: ["depin"]
+    defillama_categories: []
+    tokens:
+      - {id: helium, symbol: HNT}
+      - {id: hivemapper, symbol: HONEY}
+      - {id: geodnet, symbol: GEOD}
+
+  perps_dex:
+    label: "Perps et DEX"
+    keywords: ["perp DEX", "perps DEX", "perpetual DEX", "onchain orderbook", "on-chain orderbook",
+               "decentralized perpetuals", "perp exchange"]
+    coingecko_categories: ["perpetuals"]
+    defillama_categories: ["Derivatives", "Dexs"]
+    tokens:
+      - {id: hyperliquid, symbol: HYPE}
+      - {id: dydx-chain, symbol: DYDX}
+      - {id: gmx, symbol: GMX}
+      - {id: aster-2, symbol: ASTER}
+
+  stablecoins_payments:
+    label: "Stablecoins et paiements"
+    keywords: ["stablecoin", "stablecoins", "payments rail", "payment rails", "yield-bearing stable",
+               "yield-bearing stablecoin", "stablecoin chain", "GENIUS Act"]
+    coingecko_categories: ["stablecoins"]
+    defillama_categories: ["CDP", "Basis Trading"]
+    tokens:
+      - {id: ethena, symbol: ENA}
+      - {id: plasma, symbol: XPL}
+      - {id: sky, symbol: SKY}
+
+  restaking:
+    label: "Restaking et sécurité partagée"
+    keywords: ["restaking", "restake", "AVS", "shared security", "liquid restaking", "LRT"]
+    coingecko_categories: ["restaking"]
+    defillama_categories: ["Restaking", "Liquid Restaking"]
+    tokens:
+      - {id: eigenlayer, symbol: EIGEN}
+      - {id: ether-fi, symbol: ETHFI}
+      - {id: symbiotic-fi, symbol: SYMBIOTIC}
+
+  new_l1_l2:
+    label: "Nouvelles L1/L2"
+    keywords: ["mainnet launch", "mainnet", "testnet", "parallel EVM", "new L1", "new L2",
+               "rollup launch", "based rollup", "appchain"]
+    github_queries: ['"parallel EVM"', '"based rollup"', 'appchain', 'testnet evm', 'rollup sequencer']
+    coingecko_categories: ["layer-1", "layer-2"]
+    defillama_categories: ["Chain"]
+    tokens:
+      - {id: monad, symbol: MON}
+      - {id: berachain-bera, symbol: BERA}
+      - {id: sei-network, symbol: SEI}
+
+  memecoins:
+    label: "Memecoins"
+    keywords: ["memecoin", "memecoins", "meme coin", "pump.fun", "meme season", "memeszn"]
+    coingecko_categories: ["meme-token"]
+    defillama_categories: []
+    alarm_only: true
+    tokens:
+      - {id: pepe, symbol: PEPE}
+      - {id: dogwifcoin, symbol: WIF}
+      - {id: bonk, symbol: BONK}
