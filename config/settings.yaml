@@ -117,6 +117,7 @@ alerts:
   min_history_for_decile: 20
   fallback_min_score: 1.5           # avant 20 jours d'historique : seuil absolu
   max_per_day: 2
+  cooldown_days: 7                  # pas de nouvelle alerte d'entrée sur le même narratif avant 7 j
 
 # Filtre d'exclusion des tokens (avant toute mise en avant).
 token_filter:

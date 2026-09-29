@@ -1,0 +1,45 @@
+name: Récap hebdomadaire (lundi 8h Paris)
+
+on:
+  schedule:
+    # 8h heure de Paris le lundi = 06:00 UTC en été, 07:00 UTC en hiver (cf. daily.yml).
+    - cron: "0 6 * * 1"
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Envoyer maintenant (ignorer fenêtre horaire et anti-doublon)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: radar-db
+  cancel-in-progress: false
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Récap hebdomadaire
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          if [ "$FORCE" = "true" ]; then python -m radar weekly --force; else python -m radar weekly; fi
+      - name: Commit de la base
+        if: always()
+        run: |
+          .github/actions-commit.sh "data: récap hebdo $(date -u +%Y-%m-%d)"

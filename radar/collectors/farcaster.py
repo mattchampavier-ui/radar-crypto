@@ -38,6 +38,8 @@ def collect(conn, cfg: Config) -> CollectResult:
             try:
                 data = get_json(session, f"{API}/feed/channels", params=params)
             except HttpError as exc:
+                if exc.status == 0:
+                    raise
                 if exc.status in (401, 402, 403):
                     raise SkipCollector(f"Neynar : accès refusé (HTTP {exc.status}), plan gratuit insuffisant ?")
                 res.errors.append(f"/{channel}: {exc}")

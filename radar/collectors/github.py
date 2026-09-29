@@ -58,6 +58,8 @@ def collect(conn, cfg: Config) -> CollectResult:
                             params={"q": q, "sort": "stars", "order": "desc",
                                     "per_page": int(c.get("per_query", 50))})
         except HttpError as exc:
+            if exc.status == 0:
+                raise
             res.errors.append(f"{query}: HTTP {exc.status}")
             if exc.status in (401, 403) and not token:
                 break

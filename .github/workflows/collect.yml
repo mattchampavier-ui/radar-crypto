@@ -1,0 +1,51 @@
+name: Collecte (toutes les 3 h)
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"          # UTC, minute décalée pour éviter la congestion de :00
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Collecteurs à lancer (ex. reddit,github) — vide = tous"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+# Une seule tâche à la fois écrit dans la base versionnée.
+concurrency:
+  group: radar-db
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Collecte + pré-filtre + classification
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
+          NEYNAR_API_KEY: ${{ secrets.NEYNAR_API_KEY }}
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          if [ -n "$ONLY" ]; then
+            python -m radar collect --only "$ONLY" --sample 10
+          else
+            python -m radar collect
+          fi
+      - name: Commit de la base
+        if: always()
+        run: |
+          .github/actions-commit.sh "data: collecte $(date -u +%Y-%m-%dT%H:%MZ)"

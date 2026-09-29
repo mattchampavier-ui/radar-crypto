@@ -68,8 +68,12 @@ def test_scoring_end_to_end(cfg, conn):
     # Narratif sans aucune mention : sous le plancher.
     assert today["depin"]["flags"].get("below_floor") and today["depin"]["score"] <= 0
 
-    alerts = {(r["narrative"], r["kind"]) for r in conn.execute("SELECT * FROM alerts WHERE date=?", (END.isoformat(),))}
-    assert ("restaking", "entry") in alerts
+    # Alerte d'entrée dès le 1er jour de l'accélération, puis délai de carence de 7 jours.
+    entries = [r[0] for r in conn.execute(
+        "SELECT date FROM alerts WHERE narrative='restaking' AND kind='entry' AND date > ?",
+        ((END - timedelta(days=7)).isoformat(),))]
+    assert entries == [(END - timedelta(days=6)).isoformat()]
+    assert rs["alert"]                        # le seuil reste franchi, mais pas de nouvelle alerte
     # Memecoins : passage en phase 3 -> alerte de retard, une seule fois, au 3e jour du pic
     # (MA7/MA30 des mentions Reddit franchit 2 : (4x4 + 3x25)/7 / ((27x4 + 3x25)/30) = 2,1).
     late = conn.execute("SELECT date FROM alerts WHERE narrative='memecoins' AND kind='late'").fetchall()

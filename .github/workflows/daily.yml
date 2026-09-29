@@ -1,0 +1,45 @@
+name: Scoring + email quotidien (7h30 Paris)
+
+on:
+  schedule:
+    # 7h30 heure de Paris = 05:30 UTC en été, 06:30 UTC en hiver. Les deux crons tournent ;
+    # le script n'envoie que dans la fenêtre horaire de Paris et une seule fois par jour.
+    - cron: "30 5 * * *"
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Envoyer maintenant (ignorer fenêtre horaire et anti-doublon)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: radar-db
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Scoring de la veille et email
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          if [ "$FORCE" = "true" ]; then python -m radar daily --force; else python -m radar daily; fi
+      - name: Commit de la base
+        if: always()
+        run: |
+          .github/actions-commit.sh "data: scoring $(date -u +%Y-%m-%d)"

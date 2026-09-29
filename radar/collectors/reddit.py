@@ -32,8 +32,11 @@ def _session() -> tuple[requests.Session, str]:
     if not (client_id and secret):
         log.warning("Reddit : pas d'identifiants OAuth, essai des endpoints publics")
         return s, PUBLIC_BASE
-    r = s.post(TOKEN_URL, auth=(client_id, secret),
-               data={"grant_type": "client_credentials"}, timeout=30)
+    try:
+        r = s.post(TOKEN_URL, auth=(client_id, secret),
+                   data={"grant_type": "client_credentials"}, timeout=30)
+    except requests.RequestException as exc:
+        raise HttpError(0, TOKEN_URL, str(exc)) from exc
     if r.status_code != 200:
         raise SkipCollector(f"Reddit OAuth refusé (HTTP {r.status_code}) : vérifier les secrets")
     s.headers["Authorization"] = f"bearer {r.json()['access_token']}"
@@ -73,6 +76,8 @@ def collect(conn, cfg: Config) -> CollectResult:
             try:
                 data = get_json(session, f"{base}/r/{sub}/new{suffix}", params=params)
             except HttpError as exc:
+                if exc.status == 0:
+                    raise
                 if base == PUBLIC_BASE and exc.status in (401, 403, 429):
                     raise SkipCollector(f"Reddit public bloqué (HTTP {exc.status}) : configurer l'OAuth")
                 res.errors.append(f"r/{sub}: {exc}")

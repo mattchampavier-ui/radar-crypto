@@ -12,8 +12,11 @@ USER_AGENT = "radar-crypto/0.1 (+https://github.com/mattchampavier-ui/radar-cryp
 
 
 class HttpError(RuntimeError):
+    """Erreur HTTP (status = code) ou réseau (status = 0 : hôte injoignable, timeout...)."""
+
     def __init__(self, status: int, url: str, body: str = ""):
-        super().__init__(f"HTTP {status} sur {url}: {body[:200]}")
+        what = f"HTTP {status}" if status else "erreur réseau"
+        super().__init__(f"{what} sur {url.split('?')[0]}: {body[:200]}")
         self.status = status
 
 
@@ -48,5 +51,6 @@ def get_json(session: requests.Session, url: str, *, params: dict | None = None,
             wait = backoff * (2 ** attempt)
             log.warning("Nouvel essai dans %.0fs (%s)", wait, last_exc)
             time.sleep(wait)
-    assert last_exc is not None
-    raise last_exc
+    if isinstance(last_exc, HttpError):
+        raise last_exc
+    raise HttpError(0, url, f"{type(last_exc).__name__}: {last_exc}")

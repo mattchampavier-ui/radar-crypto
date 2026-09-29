@@ -145,6 +145,9 @@ def connect(path: Path | str) -> sqlite3.Connection:
     return conn
 
 
+MAX_BODY_CHARS = 3000   # garde la base (versionnée dans git) compacte
+
+
 def upsert_post(conn: sqlite3.Connection, post: dict) -> bool:
     """Insère un post ; s'il existe déjà, met à jour l'engagement. Retourne True si nouveau."""
     now = int(time.time())
@@ -160,7 +163,7 @@ def upsert_post(conn: sqlite3.Connection, post: dict) -> bool:
                               created_at, collected_at, engagement, extra)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (post["id"], post["source"], post["tier"], post.get("channel"), post.get("author"),
-         post.get("title"), post.get("body"), post.get("url"), int(post["created_at"]), now,
+         (post.get("title") or "")[:500], (post.get("body") or "")[:MAX_BODY_CHARS], post.get("url"), int(post["created_at"]), now,
          post.get("engagement", 0), _json(post.get("extra"))),
     )
     return True

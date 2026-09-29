@@ -48,6 +48,7 @@ class DayStats:
     mainstream: int = 0
     posts: int = 0
     authors: Counter = field(default_factory=Counter)   # auteur -> mentions pondérées
+    author_posts: Counter = field(default_factory=Counter)  # auteur -> nb de posts
     tokens: Counter = field(default_factory=Counter)    # token -> nb de posts
 
 
@@ -99,6 +100,7 @@ def _load(conn, cfg: Config, start: date, end: date):
             if p["source"] == "reddit":
                 s.m_reddit += w
             s.authors[f"{p['source']}:{p['author']}"] += w
+            s.author_posts[f"{p['source']}:{p['author']}"] += 1
             for t in toks.get(p["id"], []):
                 s.tokens[t] += 1
     return stats, total, total_posts, token_all
@@ -156,15 +158,19 @@ def _raw_metrics(cfg: Config, s: dict[date, DayStats], total, market, d: date) -
     above = ma30 >= sc["volume_floor"]
     v = ma7 / ma30 if above and ma30 > 0 else None
 
-    a7, a30 = Counter(), Counter()
+    a7, a30, n7 = Counter(), Counter(), Counter()
     for x in w7:
         a7.update(x.authors)
+        n7.update(x.author_posts)
     for x in w30:
         a30.update(x.authors)
     b = None
     concentration = 0.0
     if above and a30:
-        top = sum(w for _, w in a7.most_common(sc["concentration_top_n"]))
+        # Seuls les comptes qui publient plusieurs fois comptent : à faible volume, 5 auteurs
+        # uniques font mécaniquement > 40 % des mentions sans qu'il y ait campagne.
+        repeat = Counter({a: w for a, w in a7.items() if n7[a] >= 2})
+        top = sum(w for _, w in repeat.most_common(sc["concentration_top_n"]))
         concentration = top / m7 if m7 else 0.0
         thr = sc["concentration_threshold"]
         penalty = max(0.0, (concentration - thr) / (1 - thr)) if concentration > thr else 0.0
@@ -241,7 +247,7 @@ def compute(conn, cfg: Config, start: date, end: date) -> dict[date, dict[str, d
                 if top_n / sum(tok.values()) > sc["penalties"]["single_token_share"]:
                     flags["hot_token"] = top_id
                     penalties += sc["penalties"]["single_token"]
-            if r["niche7"] <= 0:
+            if r["niche7"] <= 0 and r["ma7"] > 0:
                 flags["no_niche_source"] = True
                 penalties += sc["penalties"]["no_niche_source"]
             posts7 = sum(total_posts.get(d - timedelta(days=i), 0) for i in range(7))
@@ -314,6 +320,7 @@ def run_scoring(conn, cfg: Config, start: date, end: date | None = None) -> dict
     end = end or start
     results = compute(conn, cfg, start, end)
     max_alerts = cfg.settings["alerts"]["max_per_day"]
+    cooldown = cfg.settings["alerts"].get("cooldown_days", 7)
     for d, day_res in results.items():
         ds = d.isoformat()
         prev = {r["narrative"]: r["phase"] for r in conn.execute(
@@ -325,7 +332,12 @@ def run_scoring(conn, cfg: Config, start: date, end: date | None = None) -> dict
                 (ds, n, *[r[c] for c in COLS], json.dumps(r["flags"])),
             )
         conn.execute("DELETE FROM alerts WHERE date = ?", (ds,))
-        entries = sorted((x for x in day_res.items() if x[1]["alert"]), key=lambda x: -x[1]["score"])
+        # Délai de carence : pas de nouvelle alerte d'entrée pour un narratif déjà alerté récemment.
+        recent = {r[0] for r in conn.execute(
+            "SELECT narrative FROM alerts WHERE kind = 'entry' AND date >= ? AND date < ?",
+            ((d - timedelta(days=cooldown)).isoformat(), ds))}
+        entries = sorted((x for x in day_res.items() if x[1]["alert"] and x[0] not in recent),
+                         key=lambda x: -x[1]["score"])
         for n, r in entries[:max_alerts]:
             conn.execute("INSERT INTO alerts VALUES (?, ?, 'entry', ?, ?, ?)",
                          (ds, n, r["score"], r["phase"], json.dumps({"d": r["d"], "flags": r["flags"]})))

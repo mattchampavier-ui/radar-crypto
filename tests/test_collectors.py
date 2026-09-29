@@ -129,3 +129,13 @@ def test_defillama(cfg, conn):
     r = conn.execute("SELECT * FROM defillama_snapshots WHERE category='Restaking'").fetchone()
     assert r["tvl"] == 11e9 and r["n_protocols"] == 2 and r["revenue_24h"] == 50000
     assert round(r["tvl_change_7d"], 1) == 22.2   # 11e9 / (8e9 + 1e9) - 1
+
+
+@responses.activate
+def test_network_error_becomes_http_error():
+    import requests
+    from radar.http import HttpError, get_json, make_session
+    responses.get("https://down.example/x", body=requests.ConnectionError("boom"))
+    with pytest.raises(HttpError) as exc:
+        get_json(make_session(), "https://down.example/x", retries=1)
+    assert exc.value.status == 0
