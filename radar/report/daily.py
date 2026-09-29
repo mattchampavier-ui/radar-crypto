@@ -35,6 +35,9 @@ def build_daily(conn, cfg: Config, d: date) -> tuple[str, str, str]:
     entries = [a for a in alerts if a["kind"] == "entry"]
     late = [a for a in alerts if a["kind"] == "late"]
     label = {k: n.label for k, n in cfg.narratives.items()}
+
+    def name(a) -> str:
+        return label.get(a["narrative"], a["narrative"])
     parts, text = [], [f"Radar crypto — {d.isoformat()}", ""]
 
     # 1. Alertes d'entrée.
@@ -45,13 +48,13 @@ def build_daily(conn, cfg: Config, d: date) -> tuple[str, str, str]:
             posts = top_posts(conn, cfg, a["narrative"], d)
             blocks.append(
                 f'<div style="border-left:4px solid #1a7f37;padding:6px 10px;margin:0 0 12px">'
-                f'<div style="font-size:15px"><b>{e(label.get(a["narrative"], a["narrative"]))}</b> {phase_badge(a["phase"])} '
+                f'<div style="font-size:15px"><b>{e(name(a))}</b> {phase_badge(a["phase"])} '
                 f'score <b>{num(a["score"])}</b></div>'
                 f'<div style="color:#57606a">V {num(s.get("v"))} · A {num(s.get("a"))} · B {num(s.get("b"))} · '
                 f'Q {num(s.get("q"), "{:.0%}")} · divergence {num(s.get("d"))} · panier 7 j {pct(s.get("r7"))}</div>'
                 f'<div style="margin-top:6px"><b>3 posts sources</b>{_posts_html(posts)}</div>'
                 f'<div><b>Tokens rattachés</b>{_tokens_html(token_report(conn, cfg, a["narrative"]))}</div></div>')
-            text.append(f"ALERTE {label.get(a["narrative"], a["narrative"])} — phase {a['phase']}, score {a['score']:.2f}")
+            text.append(f"ALERTE {name(a)} — phase {a['phase']}, score {a['score']:.2f}")
             text += [f"  - {p['title']} ({p['url']})" for p in posts]
         parts.append(section(f"🚨 Alertes narratif ({len(entries)})", "".join(blocks)))
     else:
@@ -61,10 +64,10 @@ def build_daily(conn, cfg: Config, d: date) -> tuple[str, str, str]:
     # 2. Alertes de retard.
     if late:
         li = "".join(
-            f"<li><b>{e(label.get(a["narrative"], a["narrative"]))}</b> : phase {json.loads(a['payload'])['from_phase']} → "
+            f"<li><b>{e(name(a))}</b> : phase {json.loads(a['payload'])['from_phase']} → "
             f"{phase_badge(a['phase'])} — fenêtre qui se referme</li>" for a in late)
         parts.append(section("⏰ Alertes de retard", f'<ul style="margin:0 0 0 18px;padding:0">{li}</ul>'))
-        text += [f"RETARD {label.get(a["narrative"], a["narrative"])} -> phase {a['phase']}" for a in late]
+        text += [f"RETARD {name(a)} -> phase {a['phase']}" for a in late]
 
     # 3. Classement.
     ranked = sorted(scores.items(), key=lambda x: -(x[1]["score"] or 0))
@@ -111,6 +114,6 @@ def build_daily(conn, cfg: Config, d: date) -> tuple[str, str, str]:
 
     n_alerts = len(entries)
     subject = f"Radar crypto {d.strftime('%d/%m')} — " + (
-        f"🚨 {n_alerts} alerte{'s' if n_alerts > 1 else ''} : " + ", ".join(label.get(a["narrative"], a["narrative"]) for a in entries)
+        f"🚨 {n_alerts} alerte{'s' if n_alerts > 1 else ''} : " + ", ".join(name(a) for a in entries)
         if entries else "pas d'alerte" + (f", top : {label.get(ranked[0][0], ranked[0][0])}" if ranked else ""))
     return subject, wrap(f"Radar crypto — {d.strftime('%d/%m/%Y')}", "".join(parts)), "\n".join(text)
