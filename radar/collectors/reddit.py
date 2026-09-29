@@ -1,14 +1,19 @@
 """Reddit : derniers posts des subreddits configurés (phase 3, alarme d'arrivée des particuliers).
 
-Authentification OAuth "application-only" (client_credentials) avec une app de type "script"
-créée sur https://www.reddit.com/prefs/apps. Sans identifiants, on tente les endpoints JSON
-publics (souvent bloqués depuis les IP de GitHub Actions) puis on saute proprement.
+Deux modes :
+- OAuth "application-only" (client_credentials) si REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET sont
+  définis. Depuis la "Responsible Builder Policy", Reddit doit d'abord valider l'accès à l'API.
+- Sinon, flux RSS publics des subreddits (sans clé) : pas de score ni d'âge des comptes, mais les
+  mentions et les auteurs uniques suffisent pour l'alarme de phase 3. Si Reddit bloque ces flux
+  (HTTP 403/429), le collecteur est sauté proprement.
 """
 from __future__ import annotations
 
+import calendar
 import logging
 import time
 
+import feedparser
 import requests
 
 from ..config import Config, env
@@ -21,17 +26,13 @@ log = logging.getLogger(__name__)
 
 TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 OAUTH_BASE = "https://oauth.reddit.com"
-PUBLIC_BASE = "https://www.reddit.com"
+RSS_URL = "https://www.reddit.com/r/{sub}/new/.rss"
 IGNORED_AUTHORS = {"[deleted]", "AutoModerator", None, ""}
 
 
-def _session() -> tuple[requests.Session, str]:
+def _session() -> requests.Session:
     client_id, secret = env("REDDIT_CLIENT_ID"), env("REDDIT_CLIENT_SECRET")
-    ua = env("REDDIT_USER_AGENT", "radar-crypto/0.1")
-    s = make_session({"User-Agent": ua})
-    if not (client_id and secret):
-        log.warning("Reddit : pas d'identifiants OAuth, essai des endpoints publics")
-        return s, PUBLIC_BASE
+    s = make_session({"User-Agent": env("REDDIT_USER_AGENT", "radar-crypto/0.1")})
     try:
         r = s.post(TOKEN_URL, auth=(client_id, secret),
                    data={"grant_type": "client_credentials"}, timeout=30)
@@ -40,7 +41,7 @@ def _session() -> tuple[requests.Session, str]:
     if r.status_code != 200:
         raise SkipCollector(f"Reddit OAuth refusé (HTTP {r.status_code}) : vérifier les secrets")
     s.headers["Authorization"] = f"bearer {r.json()['access_token']}"
-    return s, OAUTH_BASE
+    return s
 
 
 def _to_post(d: dict, tier: str) -> dict:
@@ -61,10 +62,13 @@ def _to_post(d: dict, tier: str) -> dict:
 
 
 def collect(conn, cfg: Config) -> CollectResult:
+    if not (env("REDDIT_CLIENT_ID") and env("REDDIT_CLIENT_SECRET")):
+        log.info("Reddit : pas d'identifiants OAuth, collecte via les flux RSS publics")
+        return _collect_rss(conn, cfg)
     c = cfg.collector("reddit")
     res = CollectResult("reddit")
-    session, base = _session()
-    suffix = ".json" if base == PUBLIC_BASE else ""
+    session = _session()
+    base, suffix = OAUTH_BASE, ""
     authors_to_check: set[str] = set()
 
     for sub in c.get("subreddits", []):
@@ -78,8 +82,6 @@ def collect(conn, cfg: Config) -> CollectResult:
             except HttpError as exc:
                 if exc.status == 0:
                     raise
-                if base == PUBLIC_BASE and exc.status in (401, 403, 429):
-                    raise SkipCollector(f"Reddit public bloqué (HTTP {exc.status}) : configurer l'OAuth")
                 res.errors.append(f"r/{sub}: {exc}")
                 break
             children = data.get("data", {}).get("children", [])
@@ -126,3 +128,51 @@ def _lookup_authors(conn, session, base, suffix, authors: set[str], limit: int, 
              int(time.time())),
         )
         time.sleep(0.7)
+
+
+def _collect_rss(conn, cfg: Config) -> CollectResult:
+    """Repli sans clé : flux RSS (Atom) « new » de chaque subreddit, 25 à 100 posts par flux."""
+    from .rss import _clean
+
+    c = cfg.collector("reddit")
+    res = CollectResult("reddit")
+    session = make_session({"User-Agent": env("REDDIT_USER_AGENT", "radar-crypto/0.1 (rss)")})
+    for sub in c.get("subreddits", []):
+        url = RSS_URL.format(sub=sub)
+        try:
+            r = session.get(url, params={"limit": 100}, timeout=30)
+        except requests.RequestException as exc:
+            raise HttpError(0, url, str(exc)) from exc
+        if r.status_code in (401, 403, 429):
+            if res.new or res.seen:
+                res.errors.append(f"r/{sub}: HTTP {r.status_code}")
+                break
+            raise SkipCollector(f"Flux RSS Reddit bloqués (HTTP {r.status_code})")
+        if r.status_code != 200:
+            res.errors.append(f"r/{sub}: HTTP {r.status_code}")
+            continue
+        for entry in feedparser.parse(r.content).entries:
+            native = (entry.get("id") or "").removeprefix("t3_")
+            parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+            if not native or not parsed:
+                continue
+            post = {
+                "id": f"reddit:{native}",          # même id qu'en OAuth : pas de doublon au changement de mode
+                "source": "reddit",
+                "tier": c.get("tier", "retail"),
+                "channel": sub,
+                "author": (entry.get("author") or "").removeprefix("/u/") or None,
+                "title": _clean(entry.get("title", "")),
+                "body": _clean(entry["content"][0].get("value", "")) if entry.get("content") else "",
+                "url": entry.get("link"),
+                "created_at": calendar.timegm(parsed),
+                "engagement": 0,
+                "extra": {"via": "rss"},
+            }
+            if upsert_post(conn, post):
+                res.new += 1
+            else:
+                res.seen += 1
+        conn.commit()
+        time.sleep(2)   # rester discret : les flux publics sont limités en débit
+    return res

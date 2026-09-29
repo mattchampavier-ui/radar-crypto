@@ -40,8 +40,22 @@ def test_reddit_oauth(cfg, conn, monkeypatch):
 
 
 @responses.activate
-def test_reddit_public_blocked_is_skipped(cfg, conn):
-    responses.get("https://www.reddit.com/r/CryptoCurrency/new.json", status=403)
+def test_reddit_rss_fallback_without_credentials(cfg, conn):
+    responses.get("https://www.reddit.com/r/CryptoCurrency/new/.rss", body=fixture("reddit_new.rss"))
+    only(cfg, "reddit", subreddits=["CryptoCurrency"])
+    res = get_collector("reddit")(conn, cfg)
+    assert res.new == 2 and not res.errors
+    row = conn.execute("SELECT * FROM posts WHERE id='reddit:1abc01'").fetchone()
+    assert row["author"] == "alice_dev" and row["channel"] == "CryptoCurrency"
+    assert row["body"] == "RWA TVL doubled this quarter. $ONDO leads."
+    assert row["title"] == "Tokenized treasuries are quietly eating DeFi"
+    # Aucun appel à l'API (ni jeton OAuth, ni /user/.../about).
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_reddit_rss_blocked_is_skipped(cfg, conn):
+    responses.get("https://www.reddit.com/r/CryptoCurrency/new/.rss", status=403)
     only(cfg, "reddit", subreddits=["CryptoCurrency"])
     with pytest.raises(SkipCollector):
         get_collector("reddit")(conn, cfg)

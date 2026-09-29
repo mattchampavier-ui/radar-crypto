@@ -18,7 +18,7 @@ radar-crypto/
 │   ├── db.py                  # schéma SQLite
 │   ├── http.py                # session HTTP, retries/backoff
 │   ├── collectors/            # un module par source, tous testés sur fixtures
-│   │   ├── reddit.py          #   phase 3 (alarme) — OAuth app-only
+│   │   ├── reddit.py          #   phase 3 (alarme) — OAuth, ou flux RSS publics sans clé
 │   │   ├── github.py          #   phase 1 — nouveaux repos par mots-clés
 │   │   ├── farcaster.py       #   phase 1 — Neynar, sauté si pas de clé / plan insuffisant
 │   │   ├── rss.py             #   phase 1 (recherche, gouvernance), 2 (médias), 4 (presse)
@@ -63,8 +63,8 @@ radar-crypto/
 | Secret | Obligatoire | Où l'obtenir |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | recommandé | console.anthropic.com. Sans clé : repli sur les mots-clés |
-| `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | oui pour Reddit | reddit.com/prefs/apps → « create app » → type **script**. Reddit peut exiger une validation de l'accès API ; tant que l'OAuth échoue, le collecteur est sauté et l'email le signale |
-| `REDDIT_USER_AGENT` | oui pour Reddit | ex. `radar-crypto/0.1 by u/ton_pseudo` |
+| `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | non | Reddit exige désormais une validation préalable de l'accès API (Responsible Builder Policy). **Sans ces secrets, le radar lit les flux RSS publics des subreddits** (sans score ni âge des comptes). Une fois l'accès obtenu : reddit.com/prefs/apps → app de type **script**, redirect uri `http://localhost:8080` |
+| `REDDIT_USER_AGENT` | non | ex. `radar-crypto/0.1 by u/ton_pseudo` |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | oui | Compte Google → Sécurité → validation en 2 étapes → **Mots de passe d'application** |
 | `EMAIL_TO` | non | destinataires séparés par des virgules (défaut : `GMAIL_USER`) |
 | `NEYNAR_API_KEY` | non | neynar.com. Si absente ou si le plan gratuit refuse l'endpoint, Farcaster est sauté |
