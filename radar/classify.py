@@ -94,8 +94,6 @@ def classify_pending(conn, cfg: Config, client: anthropic.Anthropic | None = Non
         (PENDING, int(llm["max_posts_per_run"])),
     ).fetchall()
     stats = {"pending": len(rows), "llm": 0, "fallback": 0, "failed_batches": 0}
-    if not rows:
-        return stats
 
     if client is None and env("ANTHROPIC_API_KEY"):
         client = anthropic.Anthropic()
@@ -105,6 +103,18 @@ def classify_pending(conn, cfg: Config, client: anthropic.Anthropic | None = Non
             _fallback(conn, r)
         conn.commit()
         stats["fallback"] = len(rows)
+        return stats
+
+    # Rattrapage : avec une clé disponible, les posts classés par simple repli mots-clés
+    # (30 derniers jours, les plus récents d'abord) passent au LLM avec le budget restant.
+    room = int(llm["max_posts_per_run"]) - len(rows)
+    if room > 0:
+        backlog = conn.execute(
+            "SELECT * FROM posts WHERE classified = ? AND created_at >= ? ORDER BY created_at DESC LIMIT ?",
+            (FALLBACK, int(time.time()) - 30 * 86400, room)).fetchall()
+        rows = list(rows) + list(backlog)
+        stats["reclassified"] = len(backlog)
+    if not rows:
         return stats
 
     valid = set(cfg.narratives)

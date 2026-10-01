@@ -15,6 +15,12 @@ def test_daily_and_weekly_reports(cfg, conn):
     conn.execute("INSERT INTO market_snapshots (date, coin_id, price, market_cap, volume, circulating, total_supply, change_7d)"
                  " VALUES (?, 'ether-fi', 1.0, 5e8, 1e3, 1e8, 1e9, 1.0)", ((END + timedelta(days=1)).isoformat(),))
     conn.execute("INSERT INTO runs VALUES (strftime('%s','now'), 'farcaster', 'skipped', 0, 'NEYNAR_API_KEY absent')")
+    from radar.db import upsert_post
+    from tests.test_scoring import ts
+    upsert_post(conn, {"id": "raise1", "source": "raises", "tier": "niche", "channel": "Seed", "author": "Paradigm",
+                       "title": "RestakeCo lève 12.5 M$ (Seed) — Restaking", "url": "https://example.com/r",
+                       "created_at": ts(END - timedelta(days=7)), "engagement": 12.5})
+    conn.execute("INSERT INTO post_narratives VALUES ('raise1', 'restaking')")
     run_scoring(conn, cfg, END - timedelta(days=40), END)
 
     subject, html, text = build_daily(conn, cfg, END - timedelta(days=6))   # jour de l'alerte
@@ -24,6 +30,7 @@ def test_daily_and_weekly_reports(cfg, conn):
     assert "NEYNAR_API_KEY absent" in html                          # santé de la collecte
     assert "Alertes de retard" not in html or "Memecoins" in html
     assert "ALERTE Restaking" in text
+    assert "Levées de fonds des 7 derniers jours" in html and "RestakeCo lève 12.5 M$" in html
 
     fake = SimpleNamespace(messages=SimpleNamespace(parse=lambda **k: SimpleNamespace(
         parsed_output=Candidates(candidates=[Candidate(name="Prediction markets", terms=["prediction market"],

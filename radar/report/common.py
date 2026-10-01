@@ -22,6 +22,7 @@ FLAG_LABELS = {
     "concentrated": "concentré sur 5 comptes",
     "coingecko_trending": "CoinGecko trending",
     "reddit_spike": "pic Reddit",
+    "wikipedia_spike": "pic Wikipédia",
 }
 DISCLAIMER = ("Outil de repérage de tendances, pas un conseil d'investissement. "
               "Rituel : lire les posts sources, vérifier le filtre d'exclusion, noter la décision dans le journal.")

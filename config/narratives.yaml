@@ -10,6 +10,8 @@
 #   tokens             : panier de tokens rattachés (id CoinGecko + symbole). Liste de départ
 #                        À VALIDER : le doc indique "à constituer".
 #   alarm_only         : true = suivi en alarme seulement (pas d'alerte d'entrée).
+#   wikipedia_articles : (optionnel) articles Wikipédia anglais dont les pages vues servent
+#                        d'alarme de phase 4 (intérêt du grand public). Titres exacts, "_" pour les espaces.
 #   github_queries     : (optionnel) requêtes GitHub explicites. Par défaut = les mots-clés.
 #                        Utile quand un mot-clé est trop générique hors crypto ("AI agents").
 #
@@ -18,6 +20,7 @@
 narratives:
   agentic_ai:
     label: "IA agentique"
+    wikipedia_articles: ['AI_agent']
     keywords: ["AI agents", "AI agent", "agentic", "autonomous agents", "autonomous agent",
                "onchain agent", "agent framework", "agent launchpad", "x402"]
     github_queries: ['"AI agent" crypto', '"AI agent" web3', '"AI agent" solana', '"AI agent" onchain',
@@ -31,6 +34,7 @@ narratives:
 
   decentralized_ai:
     label: "IA décentralisée / calcul"
+    wikipedia_articles: ['Bittensor']
     keywords: ["decentralized AI", "decentralised AI", "GPU network", "decentralized compute",
                "inference network", "onchain inference", "verifiable inference", "zkML", "DeAI"]
     github_queries: ['"decentralized AI"', '"GPU network" blockchain', '"decentralized compute"',
@@ -41,10 +45,10 @@ narratives:
       - {id: bittensor, symbol: TAO}
       - {id: render-token, symbol: RENDER}
       - {id: akash-network, symbol: AKT}
-      - {id: io-net, symbol: IO}
 
   rwa:
     label: "Actifs réels tokenisés (RWA)"
+    wikipedia_articles: ['Tokenization_(finance)']
     keywords: ["RWA", "RWAs", "real world assets", "real-world assets", "tokenized treasuries",
                "tokenised treasuries", "tokenized stocks", "tokenized equities", "onchain credit",
                "private credit", "tokenization"]
@@ -57,6 +61,7 @@ narratives:
 
   depin:
     label: "Infrastructures physiques (DePIN)"
+    wikipedia_articles: ['Helium_Network']
     keywords: ["DePIN", "decentralized wireless", "decentralized physical infrastructure",
                "sensor network", "proof of coverage", "DeWi"]
     coingecko_categories: ["depin"]
@@ -68,6 +73,7 @@ narratives:
 
   perps_dex:
     label: "Perps et DEX"
+    wikipedia_articles: ['Hyperliquid']
     keywords: ["perp DEX", "perps DEX", "perpetual DEX", "onchain orderbook", "on-chain orderbook",
                "decentralized perpetuals", "perp exchange"]
     coingecko_categories: ["perpetuals"]
@@ -80,6 +86,7 @@ narratives:
 
   stablecoins_payments:
     label: "Stablecoins et paiements"
+    wikipedia_articles: ['Stablecoin', 'GENIUS_Act']
     keywords: ["stablecoin", "stablecoins", "payments rail", "payment rails", "yield-bearing stable",
                "yield-bearing stablecoin", "stablecoin chain", "GENIUS Act"]
     coingecko_categories: ["stablecoins"]
@@ -91,16 +98,17 @@ narratives:
 
   restaking:
     label: "Restaking et sécurité partagée"
+    wikipedia_articles: ['EigenLayer']
     keywords: ["restaking", "restake", "AVS", "shared security", "liquid restaking", "LRT"]
     coingecko_categories: ["restaking"]
     defillama_categories: ["Restaking", "Liquid Restaking"]
     tokens:
       - {id: eigenlayer, symbol: EIGEN}
       - {id: ether-fi, symbol: ETHFI}
-      - {id: symbiotic-fi, symbol: SYMBIOTIC}
 
   new_l1_l2:
     label: "Nouvelles L1/L2"
+    wikipedia_articles: ['Monad_(blockchain)']
     keywords: ["mainnet launch", "mainnet", "testnet", "parallel EVM", "new L1", "new L2",
                "rollup launch", "based rollup", "appchain"]
     github_queries: ['"parallel EVM"', '"based rollup"', 'appchain', 'testnet evm', 'rollup sequencer']
@@ -113,6 +121,7 @@ narratives:
 
   memecoins:
     label: "Memecoins"
+    wikipedia_articles: ['Meme_coin', 'Pump.fun']
     keywords: ["memecoin", "memecoins", "meme coin", "pump.fun", "meme season", "memeszn"]
     coingecko_categories: ["meme-token"]
     defillama_categories: []

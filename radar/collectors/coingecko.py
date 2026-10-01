@@ -78,6 +78,17 @@ def collect(conn, cfg: Config) -> CollectResult:
         time.sleep(pause)
     missing = set(ids) - found
     if missing and not res.errors:
-        res.errors.append("ids CoinGecko introuvables (à corriger dans narratives.yaml) : " + ", ".join(sorted(missing)))
+        res.errors.append("ids CoinGecko introuvables (à corriger dans narratives.yaml) : "
+                          + "; ".join(_suggest(session, mid, cfg.all_tokens()[mid]["symbol"]) for mid in sorted(missing)))
     conn.commit()
     return res
+
+
+def _suggest(session, coin_id: str, symbol: str) -> str:
+    """Propose les ids CoinGecko correspondant au symbole, pour corriger la config."""
+    try:
+        coins = get_json(session, f"{API}/search", params={"query": symbol}, retries=1).get("coins", [])
+    except HttpError:
+        return coin_id
+    ids = [c["id"] for c in coins if (c.get("symbol") or "").upper() == symbol.upper()][:3]
+    return f"{coin_id} (essayer : {', '.join(ids)})" if ids else coin_id

@@ -88,6 +88,13 @@ CREATE TABLE IF NOT EXISTS defillama_snapshots (
     PRIMARY KEY (date, category)
 );
 
+CREATE TABLE IF NOT EXISTS wiki_pageviews (
+    date      TEXT NOT NULL,
+    article   TEXT NOT NULL,
+    views     INTEGER,
+    PRIMARY KEY (date, article)
+);
+
 CREATE TABLE IF NOT EXISTS term_candidates (
     term        TEXT PRIMARY KEY,
     first_seen  INTEGER, last_seen INTEGER,

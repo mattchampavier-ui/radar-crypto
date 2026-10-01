@@ -126,6 +126,26 @@ def _market(conn, cfg: Config, start: date, end: date) -> dict[str, dict[date, f
     return out
 
 
+def _wikipedia(conn, start: date, end: date) -> dict[str, dict[date, int]]:
+    out: dict[str, dict[date, int]] = defaultdict(dict)
+    for r in conn.execute("SELECT date, article, views FROM wiki_pageviews WHERE date BETWEEN ? AND ?",
+                          ((start - timedelta(days=90)).isoformat(), end.isoformat())):
+        out[r["article"]][date.fromisoformat(r["date"])] = r["views"] or 0
+    return out
+
+
+def _wiki_spike(series: dict[date, int], d: date, ph: dict) -> tuple[float, float] | None:
+    """(MA7, MA90) des pages vues si la hausse franchit les seuils de phase 4, sinon None."""
+    last7 = [series[x] for x in (d - timedelta(days=i) for i in range(7)) if x in series]
+    last90 = [series[x] for x in (d - timedelta(days=i) for i in range(90)) if x in series]
+    if len(last7) < 4 or len(last90) < 30:
+        return None
+    ma7, ma90 = statistics.fmean(last7), statistics.fmean(last90)
+    if ma90 > 0 and ma7 / ma90 >= ph.get("wikipedia_spike_ratio", 2.0) and ma7 >= ph.get("wikipedia_min_daily_views", 1000):
+        return ma7, ma90
+    return None
+
+
 def _trending(conn, start: date, end: date) -> tuple[dict[date, set], dict[date, set]]:
     coins, cats = defaultdict(set), defaultdict(set)
     for r in conn.execute("SELECT date, kind, item_id FROM trending_snapshots WHERE date BETWEEN ? AND ?",
@@ -205,6 +225,7 @@ def compute(conn, cfg: Config, start: date, end: date) -> dict[date, dict[str, d
     stats, total, total_posts, token_all = _load(conn, cfg, first, end)
     market = _market(conn, cfg, first, end)
     t_coins, t_cats = _trending(conn, first, end)
+    wiki = _wikipedia(conn, first, end)
 
     days = [first + timedelta(days=i) for i in range((end - first).days + 1)]
     raw: dict[str, dict[date, dict]] = {n: {} for n in cfg.narratives}
@@ -279,7 +300,11 @@ def compute(conn, cfg: Config, start: date, end: date) -> dict[date, dict[str, d
                 flags["coingecko_trending"] = True
             if reddit_spike:
                 flags["reddit_spike"] = True
-            if r["m_mainstream"] >= ph["mainstream_min_mentions_7d"]:
+            wiki_spikes = {a: round(sp[0] / sp[1], 1) for a in narr.wikipedia_articles
+                           if (sp := _wiki_spike(wiki.get(a, {}), d, ph))}
+            if wiki_spikes:
+                flags["wikipedia_spike"] = wiki_spikes
+            if r["m_mainstream"] >= ph["mainstream_min_mentions_7d"] or wiki_spikes:
                 phase = 4
             elif reddit_spike or trending:
                 phase = 3

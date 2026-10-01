@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 
 from ..config import Config
 from ..tokens import MANUAL_CHECKS, token_report
@@ -27,6 +27,25 @@ def _posts_html(posts: list[dict]) -> str:
                  f'<span style="color:#6e7781">— {e(p["source"])}/{e(str(p["channel"]))}, {e(str(p["author"]))}</span></li>'
                  for p in posts)
     return f'<ol style="margin:4px 0 4px 18px;padding:0">{li}</ol>'
+
+
+def _raises_html(conn, label: dict, d: date, n: int = 8) -> str:
+    """Plus grosses levées de fonds des 7 derniers jours, avec le narratif rattaché."""
+    hi = int(datetime(d.year, d.month, d.day, tzinfo=timezone.utc).timestamp()) + 86400
+    rows = conn.execute(
+        """SELECT p.title, p.url, p.author, p.engagement,
+                  (SELECT group_concat(pn.narrative) FROM post_narratives pn WHERE pn.post_id = p.id) AS narr
+           FROM posts p WHERE p.source = 'raises' AND p.created_at >= ? AND p.created_at < ?
+           ORDER BY p.engagement DESC LIMIT ?""", (hi - 7 * 86400, hi, n)).fetchall()
+    if not rows:
+        return ""
+    items = []
+    for r in rows:
+        tags = ", ".join(label.get(x, x) for x in (r["narr"] or "").split(",") if x)
+        link = f'<a href="{e(r["url"])}">{e(r["title"])}</a>' if r["url"] else e(r["title"])
+        items.append(f"<li>{link}" + (f' <span style="color:#57606a">→ {e(tags)}</span>' if tags else "") + "</li>")
+    return ('<p style="margin:12px 0 4px"><b>Levées de fonds des 7 derniers jours</b> (DefiLlama)</p>'
+            f'<ul style="margin:0 0 0 18px;padding:0">{"".join(items)}</ul>')
 
 
 def build_daily(conn, cfg: Config, d: date) -> tuple[str, str, str]:
@@ -102,6 +121,7 @@ def build_daily(conn, cfg: Config, d: date) -> tuple[str, str, str]:
         ctx += f"<p><b>CoinGecko trending</b> : {e(', '.join(t or '?' for t in trending))}</p>"
     if tvl_rows:
         ctx += table(["Narratif", "Catégorie DefiLlama", "TVL", "TVL 7 j", "Revenus 24 h"], tvl_rows)
+    ctx += _raises_html(conn, label, d)
     if ctx:
         parts.append(section("Contexte marché", ctx))
 

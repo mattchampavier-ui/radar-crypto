@@ -56,7 +56,11 @@ def collect(conn, cfg: Config) -> CollectResult:
         parsed = feedparser.parse(feed["url"], agent=USER_AGENT)
         status = getattr(parsed, "status", None)
         if parsed.bozo and not parsed.entries:
-            res.errors.append(f"{feed['name']}: {parsed.get('bozo_exception', 'flux illisible')}")
+            ctype = (getattr(parsed, "headers", {}) or {}).get("content-type", "")
+            reason = ("l'URL renvoie une page HTML, pas un flux RSS : URL à corriger" if "html" in ctype
+                      or "syntax error" in str(parsed.get("bozo_exception", "")) else
+                      str(parsed.get("bozo_exception", "flux illisible")))
+            res.errors.append(f"{feed['name']}: {reason}")
             continue
         if status and status >= 400:
             res.errors.append(f"{feed['name']}: HTTP {status}")

@@ -101,3 +101,15 @@ def test_concentration_penalty(cfg, conn):
     r = run_scoring(conn, cfg, END, END)[END]["depin"]
     assert r["flags"].get("concentrated") == 1.0
     assert r["b"] == 0.0
+
+
+def test_wikipedia_spike_forces_phase_4(cfg, conn):
+    build_history(conn)
+    for k in range(120):
+        d = END - timedelta(days=k)
+        views = 9000 if k < 5 else 2000               # x4,5 sur les derniers jours
+        conn.execute("INSERT INTO wiki_pageviews VALUES (?, 'EigenLayer', ?)", (d.isoformat(), views))
+    conn.commit()
+    r = run_scoring(conn, cfg, END, END)[END]["restaking"]
+    assert r["phase"] == 4 and "EigenLayer" in r["flags"]["wikipedia_spike"]
+    assert not r["alert"]                              # plus d'alerte d'entrée en phase 4

@@ -34,6 +34,7 @@ class Narrative:
     tokens: list[dict] = field(default_factory=list)
     alarm_only: bool = False
     github_queries: list[str] = field(default_factory=list)
+    wikipedia_articles: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -77,6 +78,7 @@ def load_config(config_dir: Path | None = None) -> Config:
             tokens=val.get("tokens", []) or [],
             alarm_only=bool(val.get("alarm_only", False)),
             github_queries=val.get("github_queries", []) or [],
+            wikipedia_articles=val.get("wikipedia_articles", []) or [],
         )
         for key, val in raw.items()
     }

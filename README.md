@@ -22,8 +22,11 @@ radar-crypto/
 │   │   ├── github.py          #   phase 1 — nouveaux repos par mots-clés
 │   │   ├── farcaster.py       #   phase 1 — Neynar, sauté si pas de clé / plan insuffisant
 │   │   ├── rss.py             #   phase 1 (recherche, gouvernance), 2 (médias), 4 (presse)
+│   │   ├── hackernews.py      #   phase 1 — stories crypto (API Algolia, sans clé)
+│   │   ├── snapshot.py        #   phase 1 — propositions de gouvernance des DAO (sans clé)
 │   │   ├── coingecko.py       #   prix des paniers, trending, catégories
-│   │   └── defillama.py       #   TVL et revenus par catégorie
+│   │   ├── defillama.py       #   TVL/revenus + levées de fonds + nouveaux protocoles (phase 1)
+│   │   └── wikipedia.py       #   phase 4 — pages vues des articles de chaque narratif
 │   ├── prefilter.py           # mots-clés -> narratifs candidats, tokens mentionnés
 │   ├── noise.py               # anti-bruit : promos, quasi-doublons, poids auteur et post
 │   ├── process.py             # enchaîne pré-filtre, promos, doublons après chaque collecte
@@ -56,6 +59,27 @@ radar-crypto/
 | 8. Mise en route | secrets, test live de chaque collecteur, 14 jours de données propres | ⏳ à toi |
 | 9. Backtest | `python -m radar score --days N` recalcule tout l'historique | après 30+ jours |
 
+## Sources
+
+| Source | Phase | Signal | Clé |
+|---|---|---|---|
+| GitHub | 1 | nouveaux repos crypto par mots-clés | `GITHUB_TOKEN` (fourni par Actions) |
+| Levées de fonds DefiLlama | 1 | où l'argent intelligent s'engage (auteur = fonds principal) | aucune |
+| Nouveaux protocoles DefiLlama | 1 | nouveaux projets listés, par catégorie | aucune |
+| Hacker News | 1 | discussions de développeurs et chercheurs | aucune |
+| Snapshot | 1 | propositions de gouvernance (≥ 20 votes, anti-spam) | aucune |
+| Blogs de recherche, forums (RSS) | 1 | thèses émergentes | aucune |
+| Farcaster (Neynar) | 1 | discussions crypto natives | `NEYNAR_API_KEY` (optionnel) |
+| Médias crypto (RSS) | 2 | reprise du narratif | aucune |
+| Reddit (RSS ou OAuth) | 3 | arrivée des particuliers (alarme) | optionnelle |
+| CoinGecko trending | 3 | tokens déjà repérés par la foule (alarme) | optionnelle |
+| Presse généraliste (RSS), pages vues Wikipédia | 4 | sommet probable (alarme de sortie) | aucune |
+| CoinGecko marchés, DefiLlama TVL/revenus | contrôle | divergence mentions/prix, usage réel | optionnelle |
+
+Les levées de fonds et nouveaux protocoles sont rattachés aux narratifs par leurs mots-clés et par
+leur catégorie DefiLlama (`defillama_categories` dans `narratives.yaml`). Les articles Wikipédia
+suivis sont listés par narratif (`wikipedia_articles`) ; les titres introuvables sont signalés.
+
 ## Mise en route
 
 ### 1. Secrets GitHub (Settings → Secrets and variables → Actions)
@@ -81,7 +105,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 cp .env.example .env            # renseigner les clés (le fichier n'est jamais commité)
 
-python -m pytest -q             # 22 tests, sans réseau
+python -m pytest -q             # 31 tests, sans réseau
 
 # Un collecteur à la fois, dans une base jetable, avec un échantillon de ce qui a été collecté :
 python -m radar --db /tmp/test.db collect --only github --sample 10
@@ -90,6 +114,9 @@ python -m radar --db /tmp/test.db collect --only rss --sample 10
 python -m radar --db /tmp/test.db collect --only farcaster --sample 10
 python -m radar --db /tmp/test.db collect --only coingecko
 python -m radar --db /tmp/test.db collect --only defillama
+python -m radar --db /tmp/test.db collect --only hackernews --sample 10
+python -m radar --db /tmp/test.db collect --only snapshot --sample 10
+python -m radar --db /tmp/test.db collect --only wikipedia
 python -m radar --db /tmp/test.db status
 
 # Aperçu des emails sans envoi (écrit out/daily.html et out/weekly.html) :
@@ -133,7 +160,7 @@ donc reproductible : `python -m radar score --date 2026-12-01 --days 60` rejoue 
 ## Limites connues de la v1
 
 - Pas de X : la phase 2 « influenceurs » est approchée par les médias crypto spécialisés.
-- Pas de Google Trends : la phase 4 repose sur les flux RSS de presse généraliste.
+- Pas de Google Trends : la phase 4 repose sur la presse généraliste (RSS) et les pages vues Wikipédia.
 - Filtre d'exclusion partiel : offre en circulation et liquidité automatiques ; concentration des
   portefeuilles, déblocages et source du rendement restent à vérifier à la main.
 - Base SQLite dans git : simple, mais l'historique du dépôt grossit (≈ 8 commits/jour). Les textes

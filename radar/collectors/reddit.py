@@ -27,6 +27,8 @@ log = logging.getLogger(__name__)
 TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 OAUTH_BASE = "https://oauth.reddit.com"
 RSS_URL = "https://www.reddit.com/r/{sub}/new/.rss"
+RSS_PAUSE = 6          # secondes entre deux subreddits
+RSS_RETRY_WAIT = 20    # attente après un HTTP 429 (x1, x2, x3)
 IGNORED_AUTHORS = {"[deleted]", "AutoModerator", None, ""}
 
 
@@ -139,11 +141,20 @@ def _collect_rss(conn, cfg: Config) -> CollectResult:
     session = make_session({"User-Agent": env("REDDIT_USER_AGENT", "radar-crypto/0.1 (rss)")})
     for sub in c.get("subreddits", []):
         url = RSS_URL.format(sub=sub)
-        try:
-            r = session.get(url, params={"limit": 100}, timeout=30)
-        except requests.RequestException as exc:
-            raise HttpError(0, url, str(exc)) from exc
-        if r.status_code in (401, 403, 429):
+        for attempt in range(3):
+            try:
+                r = session.get(url, params={"limit": 100}, timeout=30)
+            except requests.RequestException as exc:
+                raise HttpError(0, url, str(exc)) from exc
+            if r.status_code != 429:
+                break
+            # Trop de requêtes : on patiente (Retry-After si fourni) puis on réessaie.
+            wait = r.headers.get("Retry-After", "")
+            time.sleep(min(int(wait), 60) if wait.isdigit() else RSS_RETRY_WAIT * (attempt + 1))
+        if r.status_code == 429:
+            res.errors.append(f"r/{sub}: HTTP 429 malgré 3 essais")
+            continue
+        if r.status_code in (401, 403):
             if res.new or res.seen:
                 res.errors.append(f"r/{sub}: HTTP {r.status_code}")
                 break
@@ -174,5 +185,5 @@ def _collect_rss(conn, cfg: Config) -> CollectResult:
             else:
                 res.seen += 1
         conn.commit()
-        time.sleep(2)   # rester discret : les flux publics sont limités en débit
+        time.sleep(RSS_PAUSE)   # rester discret : les flux publics sont limités en débit
     return res

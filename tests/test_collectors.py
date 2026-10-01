@@ -1,5 +1,7 @@
 """Tests des collecteurs sur des réponses d'API enregistrées (aucun appel réseau)."""
+import json
 import re
+import time
 
 import pytest
 import responses
@@ -124,22 +126,49 @@ def test_coingecko(cfg, conn):
     responses.get("https://api.coingecko.com/api/v3/search/trending", json=fixture("cg_trending.json"))
     responses.get("https://api.coingecko.com/api/v3/coins/categories", json=fixture("cg_categories.json"))
     responses.get(re.compile(r"https://api\.coingecko\.com/api/v3/coins/markets.*"), json=fixture("cg_markets.json"))
+    responses.get(re.compile(r"https://api\.coingecko\.com/api/v3/search\?query=PEPE"),
+                  json={"coins": [{"id": "pepe-real", "symbol": "PEPE"}, {"id": "pepe-fake", "symbol": "PEPEX"}]})
+    responses.get(re.compile(r"https://api\.coingecko\.com/api/v3/search.*"), json={"coins": []})
     res = get_collector("coingecko")(conn, cfg)
     assert conn.execute("SELECT count(*) FROM trending_snapshots").fetchone()[0] == 3
     assert [r[0] for r in conn.execute("SELECT category_id FROM category_snapshots")] == ["restaking"]
     m = conn.execute("SELECT * FROM market_snapshots WHERE coin_id='ondo-finance'").fetchone()
     assert m["change_7d"] == 4.2
-    # Les ids absents de la réponse sont signalés pour correction de la config.
+    # Les ids absents de la réponse sont signalés, avec une suggestion d'id trouvée par symbole.
     assert any("introuvables" in e for e in res.errors)
+    assert "pepe (essayer : pepe-real)" in res.errors[0]
 
 
 # ---------------------------------------------------------------- DefiLlama
 @responses.activate
 def test_defillama(cfg, conn):
-    responses.get("https://api.llama.fi/protocols", json=fixture("llama_protocols.json"))
+    now = int(time.time())
+    protocols = fixture("llama_protocols.json") + [
+        {"name": "Agentpay", "slug": "agentpay", "category": "Payments", "chains": ["Base"], "tvl": 2e6,
+         "listedAt": now - 3 * 86400, "description": "x402 payments rail for AI agents"},
+        {"name": "Oldie", "slug": "oldie", "category": "Dexs", "tvl": 1e6, "listedAt": now - 400 * 86400}]
+    raises = {"raises": [
+        {"date": now - 86400, "name": "RestakeCo", "round": "Seed", "amount": 12.5, "category": "Restaking",
+         "sector": "Shared security for AVS operators", "chains": ["Ethereum"], "leadInvestors": ["Paradigm"],
+         "otherInvestors": ["Coinbase Ventures"], "source": "https://example.com/raise"},
+        {"date": now - 2 * 86400, "name": "Mystery", "round": None, "amount": None, "category": None,
+         "leadInvestors": [], "otherInvestors": []},
+        {"date": now - 800 * 86400, "name": "Ancient", "amount": 1, "leadInvestors": ["X"]}]}
+    responses.get("https://api.llama.fi/protocols", json=protocols)
+    responses.get("https://api.llama.fi/raises", json=raises)
     responses.get(re.compile(r"https://api\.llama\.fi/overview/fees.*"), json=fixture("llama_fees.json"))
     res = get_collector("defillama")(conn, cfg)
     assert not res.errors
+    # Nouveau protocole récent stocké comme un post ; l'ancien listing est ignoré.
+    new = conn.execute("SELECT * FROM posts WHERE id='defillama:new:agentpay'").fetchone()
+    assert new["source"] == "defillama" and new["tier"] == "niche" and "x402" in new["body"]
+    assert conn.execute("SELECT count(*) FROM posts WHERE id LIKE 'defillama:new:%'").fetchone()[0] == 1
+    # Levées de fonds : auteur = investisseur principal, montant en engagement ; > 365 j ignorées.
+    r = conn.execute("SELECT * FROM posts WHERE source='raises' AND title LIKE 'RestakeCo%'").fetchone()
+    assert r["author"] == "Paradigm" and r["engagement"] == 12.5
+    assert r["title"] == "RestakeCo lève 12.5 M$ (Seed) — Restaking / Shared security for AVS operators"
+    assert "Coinbase Ventures" in r["body"]
+    assert conn.execute("SELECT count(*) FROM posts WHERE source='raises'").fetchone()[0] == 2
     r = conn.execute("SELECT * FROM defillama_snapshots WHERE category='Restaking'").fetchone()
     assert r["tvl"] == 11e9 and r["n_protocols"] == 2 and r["revenue_24h"] == 50000
     assert round(r["tvl_change_7d"], 1) == 22.2   # 11e9 / (8e9 + 1e9) - 1
@@ -153,3 +182,80 @@ def test_network_error_becomes_http_error():
     with pytest.raises(HttpError) as exc:
         get_json(make_session(), "https://down.example/x", retries=1)
     assert exc.value.status == 0
+
+
+# ---------------------------------------------------------------- Hacker News
+@responses.activate
+def test_hackernews(cfg, conn):
+    now = int(time.time())
+    hits = {"nbPages": 1, "hits": [
+        {"objectID": "101", "title": "Stablecoin payments rails are eating cross-border fintech",
+         "url": "https://example.com/a", "author": "pg_fan", "points": 120, "num_comments": 45, "created_at_i": now - 3600},
+        {"objectID": "102", "title": "A new post-quantum cryptography library",      # cryptographie != crypto
+         "url": "https://example.org/pq", "author": "x", "points": 50, "num_comments": 3, "created_at_i": now - 7200},
+        {"objectID": "103", "title": "Ask HN: anyone building onchain AI agents?", "story_text": "<p>Curious.</p>",
+         "url": None, "author": "y", "points": 8, "num_comments": 9, "created_at_i": now - 600}]}
+    responses.get(re.compile(r"https://hn\.algolia\.com/api/v1/search_by_date.*"), json=hits)
+    only(cfg, "hackernews", queries=["crypto", "stablecoin"])
+    res = get_collector("hackernews")(conn, cfg)
+    assert res.new == 2 and not res.errors                       # 101 et 103 ; dédoublonnés entre requêtes
+    row = conn.execute("SELECT * FROM posts WHERE id='hackernews:103'").fetchone()
+    assert row["body"] == "Curious." and row["url"] == "https://news.ycombinator.com/item?id=103"
+    assert conn.execute("SELECT channel FROM posts WHERE id='hackernews:101'").fetchone()[0] == "example.com"
+    q = responses.calls[0].request.url
+    assert "tags=story" in q and "points%3E%3D3" in q
+
+
+# ---------------------------------------------------------------- Snapshot
+@responses.activate
+def test_snapshot(cfg, conn):
+    now = int(time.time())
+    props = {"data": {"proposals": [
+        {"id": "0xabc", "title": "[ARFC] Onboard tokenized treasuries as collateral", "body": "RWA collateral...",
+         "created": now - 86400, "author": "0xproposer", "votes": 340, "scores_total": 1.2e6, "state": "active",
+         "link": "https://snapshot.box/#/s:aave.eth/proposal/0xabc", "space": {"id": "aave.eth", "name": "Aave"}},
+        {"id": "0xspam", "title": "Claim your airdrop", "body": "", "created": now - 3600, "author": "0xs",
+         "votes": 1, "space": {"id": "spam.eth", "name": "Spam"}}]}}
+    responses.post("https://hub.snapshot.org/graphql", json=props)
+    res = get_collector("snapshot")(conn, cfg)
+    assert res.new == 1 and not res.errors
+    row = conn.execute("SELECT * FROM posts WHERE id='snapshot:0xabc'").fetchone()
+    assert row["author"] == "aave.eth" and row["channel"] == "Aave" and row["engagement"] == 340
+    body = json.loads(responses.calls[0].request.body)
+    assert body["variables"]["first"] == 1000 and "proposals" in body["query"]
+
+
+@responses.activate
+def test_snapshot_graphql_error(cfg, conn):
+    responses.post("https://hub.snapshot.org/graphql", json={"errors": [{"message": "Unknown field"}]})
+    res = get_collector("snapshot")(conn, cfg)
+    assert res.new == 0 and "Unknown field" in res.errors[0]
+
+
+# ---------------------------------------------------------------- Wikipédia
+@responses.activate
+def test_wikipedia(cfg, conn):
+    items = {"items": [{"article": "Stablecoin", "timestamp": "2026092900", "views": 4200},
+                       {"article": "Stablecoin", "timestamp": "2026093000", "views": 5100}]}
+    responses.get(re.compile(r"https://wikimedia\.org/.*/Stablecoin/daily/.*"), json=items)
+    responses.get(re.compile(r"https://wikimedia\.org/.*"), status=404)
+    for n in cfg.narratives.values():
+        n.wikipedia_articles = ["Stablecoin"] if n.key == "stablecoins_payments" else (
+            ["Not_an_article"] if n.key == "rwa" else [])
+    res = get_collector("wikipedia")(conn, cfg)
+    assert res.new == 2
+    assert dict(conn.execute("SELECT date, views FROM wiki_pageviews").fetchall()) == {
+        "2026-09-29": 4200, "2026-09-30": 5100}
+    assert "Not_an_article" in res.errors[0]
+    assert "User-Agent" in responses.calls[0].request.headers
+
+
+@responses.activate
+def test_reddit_rss_retries_after_429(cfg, conn):
+    responses.get("https://www.reddit.com/r/CryptoCurrency/new/.rss", status=429)
+    responses.get("https://www.reddit.com/r/CryptoCurrency/new/.rss", body=fixture("reddit_new.rss"))
+    responses.get("https://www.reddit.com/r/altcoin/new/.rss", status=429)
+    only(cfg, "reddit", subreddits=["CryptoCurrency", "altcoin"])
+    res = get_collector("reddit")(conn, cfg)
+    assert res.new == 2                                     # réussi au 2e essai
+    assert res.errors == ["r/altcoin: HTTP 429 malgré 3 essais"]

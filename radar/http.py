@@ -31,10 +31,20 @@ def make_session(headers: dict | None = None) -> requests.Session:
 def get_json(session: requests.Session, url: str, *, params: dict | None = None,
              retries: int = 3, timeout: int = 30, backoff: float = 2.0):
     """GET JSON avec retries sur 429/5xx/erreurs réseau. Lève HttpError sinon."""
+    return _request_json(session, "GET", url, params=params, retries=retries, timeout=timeout, backoff=backoff)
+
+
+def post_json(session: requests.Session, url: str, payload: dict, *,
+              retries: int = 3, timeout: int = 30, backoff: float = 2.0):
+    """POST JSON (GraphQL...) avec la même politique de retries que get_json."""
+    return _request_json(session, "POST", url, json=payload, retries=retries, timeout=timeout, backoff=backoff)
+
+
+def _request_json(session, method, url, *, retries, timeout, backoff, **kwargs):
     last_exc: Exception | None = None
     for attempt in range(retries + 1):
         try:
-            r = session.get(url, params=params, timeout=timeout)
+            r = session.request(method, url, timeout=timeout, **kwargs)
         except requests.RequestException as exc:  # réseau
             last_exc = exc
         else:

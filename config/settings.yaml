@@ -65,10 +65,9 @@ collectors:
     feeds:
       # --- Phase 1 : recherche, fonds, forums (URLs à vérifier au premier lancement)
       - {name: "a16z crypto", url: "https://a16zcrypto.com/feed/", tier: niche}
-      - {name: "Paradigm", url: "https://www.paradigm.xyz/feed.xml", tier: niche}
+      - {name: "Ethereum Foundation", url: "https://blog.ethereum.org/feed.xml", tier: niche}
       - {name: "Vitalik", url: "https://vitalik.eth.limo/feed.xml", tier: niche}
-      - {name: "Variant", url: "https://blog.variant.fund/rss", tier: niche}
-      - {name: "Galaxy Research", url: "https://www.galaxy.com/insights/feed/", tier: niche}
+      # Paradigm, Variant et Galaxy retiré(e)s : leurs URLs renvoient une page HTML, pas un flux.
       - {name: "ethresear.ch", url: "https://ethresear.ch/latest.rss", tier: niche}
       - {name: "Ethereum Magicians", url: "https://ethereum-magicians.org/latest.rss", tier: niche}
       - {name: "Flashbots forum", url: "https://collective.flashbots.net/latest.rss", tier: niche}
@@ -79,6 +78,7 @@ collectors:
       # --- Phase 2/3 : médias crypto spécialisés
       - {name: "The Defiant", url: "https://thedefiant.io/api/feed", tier: influencer}
       - {name: "Decrypt", url: "https://decrypt.co/feed", tier: influencer}
+      - {name: "The Block", url: "https://www.theblock.co/rss.xml", tier: influencer}
       - {name: "CoinDesk", url: "https://www.coindesk.com/arc/outboundfeeds/rss/", tier: influencer}
       - {name: "Cointelegraph", url: "https://cointelegraph.com/rss", tier: influencer}
       # --- Phase 4 : presse généraliste (alarme de sommet)
@@ -91,6 +91,29 @@ collectors:
     enabled: true                   # API publique ; COINGECKO_API_KEY (plan Demo gratuit) recommandé
   defillama:
     enabled: true
+    tier: niche
+    raises_lookback_days: 365       # levées de fonds (historique utile au backtest)
+    new_protocols_lookback_days: 30 # protocoles nouvellement listés
+
+  hackernews:
+    enabled: true
+    tier: niche
+    # Recherche Algolia : on ramène toutes les stories crypto, le pré-filtre fait le tri par narratif.
+    queries: [crypto, blockchain, ethereum, bitcoin, stablecoin, solana, web3, defi, onchain,
+              tokenized, "zero knowledge", rollup]
+    lookback_hours: 72              # re-balayage pour mettre à jour points et commentaires
+    min_points: 3                   # stories sans traction ignorées
+
+  snapshot:
+    enabled: true
+    tier: niche
+    lookback_days: 7                # re-balayage pour mettre à jour le nombre de votes
+    min_votes: 20                   # filtre anti-spam (beaucoup d'espaces Snapshot sont du spam)
+    pages: 3                        # 1 000 propositions par page
+
+  wikipedia:
+    enabled: true                   # pages vues des articles listés dans narratives.yaml (phase 4)
+    days: 90
 
 # Scoring quotidien.
 scoring:
@@ -110,6 +133,8 @@ scoring:
     reddit_spike_min_daily: 3.0     # ... et au moins 3 mentions Reddit/jour en moyenne 7 j
     reddit_low_share: 0.35          # part Reddit des mentions pondérées sous ce seuil = "faible"
     mainstream_min_mentions_7d: 3   # >= 3 articles presse généraliste sur 7 j -> phase 4
+    wikipedia_spike_ratio: 2.0      # pages vues MA7/MA90 >= 2 ...
+    wikipedia_min_daily_views: 1000 # ... et >= 1 000 vues/jour en moyenne 7 j -> phase 4
   token_sov_alarm: 0.01             # part de voix d'un token > 1 % -> alarme de sommet local
 
 alerts:

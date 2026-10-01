@@ -18,11 +18,17 @@ def post_text(row) -> str:
 def prefilter_new_posts(conn, cfg: Config) -> int:
     """Calcule matched / tokens / promo pour les posts jamais traités. Retourne le nb de posts matchés."""
     tokens = cfg.all_tokens()
-    rows = conn.execute("SELECT id, title, body FROM posts WHERE matched IS NULL").fetchall()
+    by_category = {c.lower(): k for k, n in cfg.narratives.items() for c in n.defillama_categories}
+    rows = conn.execute("SELECT id, source, title, body, extra FROM posts WHERE matched IS NULL").fetchall()
     n_matched = 0
     for row in rows:
         text = post_text(row)
         matched = match_narratives(text, cfg.narratives)
+        # Levées de fonds et nouveaux protocoles DefiLlama : la catégorie suffit à rattacher.
+        if row["source"] in ("raises", "defillama") and row["extra"]:
+            cat = (json.loads(row["extra"]).get("category") or "").lower()
+            if cat in by_category:
+                matched.setdefault(by_category[cat], []).append(f"catégorie defillama : {cat}")
         conn.execute(
             "UPDATE posts SET matched = ?, promo_flag = ?, classified = ? WHERE id = ?",
             (json.dumps(matched), int(is_promo(text)), PENDING if matched else NO_MATCH, row["id"]),

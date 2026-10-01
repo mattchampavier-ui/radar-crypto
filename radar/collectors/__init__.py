@@ -1,7 +1,8 @@
 """Collecteurs de données. Chaque module expose `collect(conn, cfg) -> CollectResult`."""
 from importlib import import_module
 
-NAMES = ["reddit", "github", "farcaster", "rss", "coingecko", "defillama"]
+NAMES = ["reddit", "github", "farcaster", "rss", "hackernews", "snapshot", "coingecko", "defillama",
+         "wikipedia"]
 
 
 def get_collector(name: str):

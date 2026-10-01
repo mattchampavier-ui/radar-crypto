@@ -106,3 +106,27 @@ def test_classify_failure_keeps_pending(cfg, conn):
     stats = classify_pending(conn, cfg, client=FakeClient(boom))
     assert stats["failed_batches"] == 1
     assert conn.execute("SELECT classified FROM posts").fetchone()[0] == PENDING
+
+
+def test_defillama_category_maps_to_narrative(cfg, conn):
+    upsert_post(conn, {"id": "r1", "source": "raises", "tier": "niche", "channel": "Seed", "author": "Paradigm",
+                       "title": "FooCo lève 5 M$ (Seed) — Restaking", "body": "Shared security", "created_at": NOW,
+                       "extra": {"category": "Restaking"}})
+    upsert_post(conn, {"id": "r2", "source": "raises", "tier": "niche", "channel": "Seed", "author": "a16z",
+                       "title": "BarCo lève 3 M$ (Seed) — Gaming", "body": "", "created_at": NOW,
+                       "extra": {"category": "Gaming"}})
+    assert prefilter_new_posts(conn, cfg) == 1
+    m = json.loads(conn.execute("SELECT matched FROM posts WHERE id='r1'").fetchone()[0])
+    assert "restaking" in m and any("catégorie" in k for k in m["restaking"])
+
+
+def test_fallback_posts_are_reclassified_when_key_available(cfg, conn):
+    add(conn, "p1", "AI agents are coming for your job")         # presse généraliste, hors crypto
+    prefilter_new_posts(conn, cfg)
+    classify_pending(conn, cfg)                                   # sans clé -> repli mots-clés
+    assert conn.execute("SELECT classified FROM posts").fetchone()[0] == FALLBACK
+    client = FakeClient(lambda k: BatchLabels(results=[PostLabel(i=0, narratives=[], type="spam", new_terms=[])]))
+    stats = classify_pending(conn, cfg, client=client)
+    assert stats["reclassified"] == 1 and stats["llm"] == 1
+    assert conn.execute("SELECT classified FROM posts").fetchone()[0] == LLM
+    assert conn.execute("SELECT count(*) FROM post_narratives").fetchone()[0] == 0   # rattachement retiré

@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 API = "https://api.github.com"
 # Contexte crypto exigé dans le nom/description/topics pour écarter les repos hors sujet.
 CRYPTO_CONTEXT = re.compile(
-    r"crypto|blockchain|web3|on-?chain|ethereum|\beth\b|solana|\bevm\b|defi|\btoken|smart contract|"
+    r"crypto(?!graph)|blockchain|web3|on-?chain|ethereum|\beth\b|solana|\bevm\b|defi|\btoken|smart contract|"
     r"rollup|\bl2\b|layer ?2|bitcoin|stablecoin|wallet|dex\b|restak|\bavs\b|depin|\brwa|farcaster|"
     r"cosmos|\bsui\b|aptos|\bbase\b|arbitrum|optimism|polygon|hyperliquid|x402|zk|nft|dao\b|memecoin|"
     r"pump\.fun|perp",
