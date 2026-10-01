@@ -39,7 +39,8 @@ def collect(conn, cfg: Config) -> CollectResult:
         a["tvl_7d"] += tvl / (1 + ch / 100) if isinstance(ch, (int, float)) and ch > -100 else tvl
 
     _new_protocols(conn, cfg, protocols, res)
-    _raises(conn, cfg, session, res)
+    if cfg.collector("defillama").get("raises", False):
+        _raises(conn, cfg, session, res)
 
     for data_type, field in (("dailyRevenue", "rev"), ("dailyFees", "fees")):
         try:

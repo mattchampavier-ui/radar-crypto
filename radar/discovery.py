@@ -79,7 +79,7 @@ def group_candidates(cfg: Config, terms: list[str], client: anthropic.Anthropic 
     if client is None:
         if not env("ANTHROPIC_API_KEY"):
             return []
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=env("ANTHROPIC_API_KEY"))
     known = "; ".join(n.label for n in cfg.narratives.values())
     try:
         resp = client.messages.parse(

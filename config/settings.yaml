@@ -92,7 +92,8 @@ collectors:
   defillama:
     enabled: true
     tier: niche
-    raises_lookback_days: 365       # levées de fonds (historique utile au backtest)
+    raises: false                   # levées de fonds : réservées au plan payant DefiLlama (HTTP 402)
+    raises_lookback_days: 365
     new_protocols_lookback_days: 30 # protocoles nouvellement listés
 
   hackernews:

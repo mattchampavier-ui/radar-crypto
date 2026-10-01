@@ -96,7 +96,7 @@ def classify_pending(conn, cfg: Config, client: anthropic.Anthropic | None = Non
     stats = {"pending": len(rows), "llm": 0, "fallback": 0, "failed_batches": 0}
 
     if client is None and env("ANTHROPIC_API_KEY"):
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=env("ANTHROPIC_API_KEY"))
     if client is None:
         log.warning("ANTHROPIC_API_KEY absent : repli sur les mots-clés")
         for r in rows:
@@ -134,6 +134,8 @@ def classify_pending(conn, cfg: Config, client: anthropic.Anthropic | None = Non
         except (anthropic.APIStatusError, anthropic.APIConnectionError, ValueError) as exc:
             # Échec du lot : les posts restent en attente et seront retentés au prochain passage.
             log.error("Classification échouée (%s) : %s", type(exc).__name__, exc)
+            if isinstance(exc, anthropic.AuthenticationError):
+                stats["error"] = "clé ANTHROPIC_API_KEY refusée par Anthropic (invalid x-api-key) : la recréer"
             stats["failed_batches"] += 1
             if isinstance(exc, anthropic.AuthenticationError):
                 break

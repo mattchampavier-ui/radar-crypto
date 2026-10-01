@@ -24,13 +24,24 @@ def test_daily_and_weekly_reports(cfg, conn):
     run_scoring(conn, cfg, END - timedelta(days=40), END)
 
     subject, html, text = build_daily(conn, cfg, END - timedelta(days=6))   # jour de l'alerte
-    assert "alerte" in subject and "Restaking" in subject
-    assert "Restaking et sécurité partagée" in html and "Classement des narratifs" in html
-    assert "ETHFI" in html and "exclu" in html                     # offre 10 % + liquidité faible
+    assert "à regarder" in subject and "Restaking" in subject
+    # En bref, puis l'alerte expliquée en clair, puis les narratifs regroupés par situation.
+    assert html.index("En bref") < html.index("Alerte") < html.index("Où en est chaque narratif")
+    assert "Pourquoi le radar sonne" in html and "Mentions ×" in html and "prix des tokens encore calme" in html
+    assert "1. Lire ces 3 posts" in html and "3. Noter ta décision" in html
+    assert "Ça monte chez les spécialistes" in html
+    assert "Ça monte, mais déjà au-delà des spécialistes" in html    # Memecoins : diffusion
+    assert "Trop calme pour juger" in html                          # narratifs sans mentions
+    assert "ETHFI" in html and "écarté" in html                     # offre 10 % + liquidité faible
     assert "NEYNAR_API_KEY absent" in html                          # santé de la collecte
-    assert "Alertes de retard" not in html or "Memecoins" in html
+    assert "Comment lire ce rapport" in html
+    assert "Classement des narratifs" not in html and "MA7/MA30" not in html   # plus de jargon
     assert "ALERTE Restaking" in text
-    assert "Levées de fonds des 7 derniers jours" in html and "RestakeCo lève 12.5 M$" in html
+    assert "Où misent les fonds" in html and "RestakeCo lève 12.5 M$" in html
+    # Le dernier jour, Memecoins est passé en phase tardive (pic Reddit + trending), avec la raison.
+    _, html_end, _ = build_daily(conn, cfg, END)
+    assert "Trop tard : la foule est déjà là" in html_end
+    assert "PEPE fait partie des tokens les plus recherchés sur CoinGecko" in html_end
 
     fake = SimpleNamespace(messages=SimpleNamespace(parse=lambda **k: SimpleNamespace(
         parsed_output=Candidates(candidates=[Candidate(name="Prediction markets", terms=["prediction market"],

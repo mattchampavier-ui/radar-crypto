@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from ..config import Config
 from ..noise import post_weight
 
-PHASES = {1: "1 · Niche", 2: "2 · Influenceurs", 3: "3 · Grand public crypto", 4: "4 · Mainstream"}
+PHASES = {1: "Phase 1 · tôt", 2: "Phase 2 · diffusion", 3: "Phase 3 · tard", 4: "Phase 4 · sommet"}
 PHASE_COLORS = {1: "#1a7f37", 2: "#2f6fbd", 3: "#b35900", 4: "#b42318"}
 FLAG_LABELS = {
     "cold_start": "historique court",
@@ -24,8 +24,7 @@ FLAG_LABELS = {
     "reddit_spike": "pic Reddit",
     "wikipedia_spike": "pic Wikipédia",
 }
-DISCLAIMER = ("Outil de repérage de tendances, pas un conseil d'investissement. "
-              "Rituel : lire les posts sources, vérifier le filtre d'exclusion, noter la décision dans le journal.")
+DISCLAIMER = "Outil de repérage de tendances, pas un conseil d'investissement."
 
 e = html.escape
 
@@ -45,7 +44,7 @@ def usd(x):
         return "–"
     for unit, div in (("Md$", 1e9), ("M$", 1e6), ("k$", 1e3)):
         if abs(x) >= div:
-            return f"{x / div:.1f} {unit}"
+            return f"{x / div:.1f} {unit}".replace(".", ",")
     return f"{x:.0f} $"
 
 

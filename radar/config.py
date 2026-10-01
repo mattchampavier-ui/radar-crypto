@@ -59,7 +59,8 @@ class Config:
 
 
 def env(name: str, default: str | None = None) -> str | None:
-    value = os.environ.get(name)
+    # .strip() : un espace ou un retour à la ligne collé avec un secret le rend invalide.
+    value = (os.environ.get(name) or "").strip()
     return value if value else default
 
 

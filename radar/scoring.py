@@ -166,17 +166,39 @@ def _z(value, history: list[float]) -> float | None:
     return (value - statistics.fmean(vals)) / sd
 
 
-def _window(series: dict[date, DayStats], d: date, days: int) -> list[DayStats]:
-    return [series.get(d - timedelta(days=i), DayStats()) for i in range(days)]
+MIN_COVERAGE_DAYS = 7   # jours de collecte minimum avant de calculer une vélocité
 
 
-def _raw_metrics(cfg: Config, s: dict[date, DayStats], total, market, d: date) -> dict:
+def _window(series: dict[date, DayStats], d: date, days: int, start: date | None = None) -> list[DayStats]:
+    """Jours [d-days+1, d], limités aux jours couverts par la collecte (>= start)."""
+    out = []
+    for i in range(days):
+        x = d - timedelta(days=i)
+        if start and x < start:
+            break
+        out.append(series.get(x, DayStats()))
+    return out
+
+
+def data_start(conn) -> date | None:
+    """Premier jour de collecte. Avant cette date, l'absence de posts ne veut rien dire : les
+    moyennes 7 j / 30 j ne portent que sur les jours couverts (sinon V vaut ~4 au démarrage)."""
+    row = conn.execute("SELECT min(ts) FROM runs WHERE status = 'ok' AND step NOT IN ('score', 'classify') "
+                       "AND step NOT LIKE 'email%'").fetchone()
+    return _day(row[0]) if row and row[0] else None
+
+
+def _raw_metrics(cfg: Config, s: dict[date, DayStats], total, market, d: date,
+                 start: date | None = None) -> dict:
     sc = cfg.settings["scoring"]
-    w7, w30 = _window(s, d, 7), _window(s, d, 30)
+    w7, w30 = _window(s, d, 7, start), _window(s, d, 30, start)
+    coverage = len(w30)
     m7 = sum(x.m for x in w7)
-    ma7, ma30 = m7 / 7, sum(x.m for x in w30) / 30
+    ma7 = m7 / len(w7) if w7 else 0.0
+    ma30 = sum(x.m for x in w30) / coverage if coverage else 0.0
     above = ma30 >= sc["volume_floor"]
-    v = ma7 / ma30 if above and ma30 > 0 else None
+    enough = coverage >= MIN_COVERAGE_DAYS
+    v = ma7 / ma30 if above and enough and ma30 > 0 else None
 
     a7, a30, n7 = Counter(), Counter(), Counter()
     for x in w7:
@@ -186,7 +208,7 @@ def _raw_metrics(cfg: Config, s: dict[date, DayStats], total, market, d: date) -
         a30.update(x.authors)
     b = None
     concentration = 0.0
-    if above and a30:
+    if above and enough and a30:
         # Seuls les comptes qui publient plusieurs fois comptent : à faible volume, 5 auteurs
         # uniques font mécaniquement > 40 % des mentions sans qu'il y ait campagne.
         repeat = Counter({a: w for a, w in a7.items() if n7[a] >= 2})
@@ -194,12 +216,12 @@ def _raw_metrics(cfg: Config, s: dict[date, DayStats], total, market, d: date) -
         concentration = top / m7 if m7 else 0.0
         thr = sc["concentration_threshold"]
         penalty = max(0.0, (concentration - thr) / (1 - thr)) if concentration > thr else 0.0
-        b = len(a7) / (len(a30) / 30 * 7) * (1 - penalty)
+        b = len(a7) / (len(a30) / coverage * len(w7)) * (1 - penalty)
 
     niche7 = sum(x.m_niche for x in w7)
     reddit7 = sum(x.m_reddit for x in w7)
     reddit30 = sum(x.m_reddit for x in w30)
-    tot7 = sum(total.get(d - timedelta(days=i), 0.0) for i in range(7))
+    tot7 = sum(total.get(d - timedelta(days=i), 0.0) for i in range(len(w7)))
     tokens7 = Counter()
     for x in w7:
         tokens7.update(x.tokens)
@@ -207,11 +229,13 @@ def _raw_metrics(cfg: Config, s: dict[date, DayStats], total, market, d: date) -
         "m": s.get(d, DayStats()).m, "posts": s.get(d, DayStats()).posts,
         "m_niche": s.get(d, DayStats()).m_niche, "m_reddit": s.get(d, DayStats()).m_reddit,
         "m_mainstream": float(sum(x.mainstream for x in w7)),
-        "ma7": ma7, "ma30": ma30, "v": v, "b": b, "above_floor": above,
+        "ma7": ma7, "ma30": ma30, "v": v, "b": b, "above_floor": above, "coverage": coverage,
+        "m7": m7,
         "q": niche7 / m7 if m7 else None,
         "sov": m7 / tot7 if tot7 else None,
         "reddit_share": reddit7 / m7 if m7 else 0.0,
-        "reddit_ma7": reddit7 / 7, "reddit_ma30": reddit30 / 30,
+        "reddit_ma7": reddit7 / len(w7) if w7 else 0.0,
+        "reddit_ma30": reddit30 / coverage if coverage else 0.0,
         "niche7": niche7, "concentration": concentration,
         "tokens7": tokens7, "r7": market.get(d),
     }
@@ -223,6 +247,7 @@ def compute(conn, cfg: Config, start: date, end: date) -> dict[date, dict[str, d
     zwin, min_hist = sc["zscore_window_days"], sc["min_history_days"]
     first = start - timedelta(days=zwin + LOOKBACK_EXTRA)
     stats, total, total_posts, token_all = _load(conn, cfg, first, end)
+    start_day = data_start(conn)
     market = _market(conn, cfg, first, end)
     t_coins, t_cats = _trending(conn, first, end)
     wiki = _wikipedia(conn, first, end)
@@ -231,7 +256,7 @@ def compute(conn, cfg: Config, start: date, end: date) -> dict[date, dict[str, d
     raw: dict[str, dict[date, dict]] = {n: {} for n in cfg.narratives}
     for n in cfg.narratives:
         for d in days[30:]:
-            raw[n][d] = _raw_metrics(cfg, stats[n], total, market[n], d)
+            raw[n][d] = _raw_metrics(cfg, stats[n], total, market[n], d, start_day)
         for d in days[37:]:
             v, v_prev = raw[n][d]["v"], raw[n][d - timedelta(days=7)]["v"]
             raw[n][d]["a"] = v - v_prev if v is not None and v_prev is not None else None
@@ -294,7 +319,8 @@ def compute(conn, cfg: Config, start: date, end: date) -> dict[date, dict[str, d
             window = [d - timedelta(days=i) for i in range(7)]
             trending = any(t["id"] in t_coins.get(x, set()) for t in narr.tokens for x in window) or \
                 any(c in t_cats.get(x, set()) for c in narr.coingecko_categories for x in window)
-            reddit_spike = (r["reddit_ma30"] > 0 and r["reddit_ma7"] / r["reddit_ma30"] >= ph["reddit_spike_ratio"]
+            reddit_spike = (r["coverage"] >= MIN_COVERAGE_DAYS and r["reddit_ma30"] > 0
+                            and r["reddit_ma7"] / r["reddit_ma30"] >= ph["reddit_spike_ratio"]
                             and r["reddit_ma7"] >= ph["reddit_spike_min_daily"])
             if trending:
                 flags["coingecko_trending"] = True

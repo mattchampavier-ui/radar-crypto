@@ -20,7 +20,6 @@
 narratives:
   agentic_ai:
     label: "IA agentique"
-    wikipedia_articles: ['AI_agent']
     keywords: ["AI agents", "AI agent", "agentic", "autonomous agents", "autonomous agent",
                "onchain agent", "agent framework", "agent launchpad", "x402"]
     github_queries: ['"AI agent" crypto', '"AI agent" web3', '"AI agent" solana', '"AI agent" onchain',
@@ -98,7 +97,6 @@ narratives:
 
   restaking:
     label: "Restaking et sécurité partagée"
-    wikipedia_articles: ['EigenLayer']
     keywords: ["restaking", "restake", "AVS", "shared security", "liquid restaking", "LRT"]
     coingecko_categories: ["restaking"]
     defillama_categories: ["Restaking", "Liquid Restaking"]

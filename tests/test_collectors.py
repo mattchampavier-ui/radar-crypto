@@ -156,6 +156,7 @@ def test_defillama(cfg, conn):
         {"date": now - 800 * 86400, "name": "Ancient", "amount": 1, "leadInvestors": ["X"]}]}
     responses.get("https://api.llama.fi/protocols", json=protocols)
     responses.get("https://api.llama.fi/raises", json=raises)
+    cfg.settings["collectors"]["defillama"]["raises"] = True       # désactivé par défaut (payant)
     responses.get(re.compile(r"https://api\.llama\.fi/overview/fees.*"), json=fixture("llama_fees.json"))
     res = get_collector("defillama")(conn, cfg)
     assert not res.errors

@@ -105,6 +105,7 @@ def test_concentration_penalty(cfg, conn):
 
 def test_wikipedia_spike_forces_phase_4(cfg, conn):
     build_history(conn)
+    cfg.narratives["restaking"].wikipedia_articles = ["EigenLayer"]
     for k in range(120):
         d = END - timedelta(days=k)
         views = 9000 if k < 5 else 2000               # x4,5 sur les derniers jours
@@ -113,3 +114,17 @@ def test_wikipedia_spike_forces_phase_4(cfg, conn):
     r = run_scoring(conn, cfg, END, END)[END]["restaking"]
     assert r["phase"] == 4 and "EigenLayer" in r["flags"]["wikipedia_spike"]
     assert not r["alert"]                              # plus d'alerte d'entrée en phase 4
+
+
+def test_short_history_does_not_inflate_velocity(cfg, conn):
+    """2 jours de collecte : sans correction, MA30 divise par 30 et V vaut ~4 partout."""
+    for k in range(2):
+        d = END - timedelta(days=k)
+        for i in range(10):
+            post(conn, f"x{k}-{i}", d, "rwa", "github", "niche", f"a{k}{i}")
+    conn.execute("INSERT INTO runs VALUES (?, 'github', 'ok', 10, '')", (ts(END - timedelta(days=1), 0),))
+    conn.commit()
+    r = run_scoring(conn, cfg, END, END)[END]["rwa"]
+    assert r["v"] is None                              # pas de vélocité avant 7 jours de collecte
+    # 10 repos/jour x poids 1,5 (niche 3 x repo sans étoile 0,5) : moyenne sur 2 jours, pas /30.
+    assert r["ma30"] == r["ma7"] == 15.0

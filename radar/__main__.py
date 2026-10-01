@@ -57,7 +57,7 @@ def cmd_collect(args, cfg) -> int:
     stats = classify_pending(conn, cfg)
     log.info("Pré-filtre : %d posts matchés, %d quasi-doublons. Classification : %s", n_matched, n_dup, stats)
     log_run(conn, "classify", "ok" if not stats["failed_batches"] else "error", stats["llm"] + stats["fallback"],
-            f"{stats}")
+            stats.get("error") or f"{stats}")
 
     if args.sample:
         print(f"\n--- {args.sample} derniers posts collectés ---")
