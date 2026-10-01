@@ -126,6 +126,8 @@ token_filter:
   min_volume_to_mcap: 0.01
 
 email:
-  daily_window: ["07:15", "12:00"]   # heure de Paris ; cron doublé été/hiver + anti-doublon
-  weekly_window: ["07:45", "13:00"]
+  # Heure de Paris. Envoi au premier passage après l'heure de début (les crons GitHub peuvent
+  # partir avec plusieurs heures de retard ; chaque collecte vérifie aussi), une fois par jour.
+  daily_window: ["07:15", "24:00"]
+  weekly_window: ["07:45", "24:00"]   # le lundi uniquement
   top_n: 10

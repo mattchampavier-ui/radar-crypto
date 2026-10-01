@@ -15,7 +15,8 @@ class MailConfigError(RuntimeError):
 def send_email(subject: str, html: str, text: str) -> list[str]:
     user, password = env("GMAIL_USER"), env("GMAIL_APP_PASSWORD")
     if not (user and password):
-        raise MailConfigError("GMAIL_USER / GMAIL_APP_PASSWORD manquants")
+        raise MailConfigError("GMAIL_USER / GMAIL_APP_PASSWORD vides : ajouter ces deux secrets dans "
+                              "Settings > Secrets and variables > Actions > onglet Secrets (Repository secrets)")
     recipients = [r.strip() for r in (env("EMAIL_TO") or user).split(",") if r.strip()]
     msg = EmailMessage()
     msg["Subject"] = subject

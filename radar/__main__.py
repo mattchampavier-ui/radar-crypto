@@ -94,6 +94,8 @@ def cmd_score(args, cfg) -> int:
 
 
 def _in_window(cfg, kind: str, now: datetime) -> bool:
+    if kind == "weekly" and now.weekday() != 0:   # récap le lundi uniquement
+        return False
     lo, hi = cfg.settings["email"][f"{kind}_window"]
     hhmm = now.strftime("%H:%M")
     return lo <= hhmm < hi

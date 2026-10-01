@@ -45,6 +45,17 @@ jobs:
           else
             python -m radar collect
           fi
+      # Filet de sécurité : les crons de daily.yml / weekly.yml partent parfois avec des heures
+      # de retard. Chaque collecte envoie donc l'email s'il est l'heure et qu'il n'est pas parti.
+      - name: Emails en attente (si l'heure est passée)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: |
+          python -m radar daily
+          python -m radar weekly
       - name: Commit de la base
         if: always()
         run: |

@@ -50,6 +50,11 @@ def test_send_window_summer_and_winter(cfg):
     assert not _in_window(cfg, "weekly", at(2026, 12, 7, 6, 0))
     assert _in_window(cfg, "weekly", at(2026, 12, 7, 7, 0))
     assert _in_window(cfg, "weekly", at(2026, 7, 6, 6, 0))
+    # Cron GitHub parti avec 6 h de retard : l'email part quand même (anti-doublon en base).
+    assert _in_window(cfg, "daily", at(2026, 9, 30, 12, 52))
+    assert _in_window(cfg, "daily", at(2026, 9, 30, 21, 59))
+    # Le récap n'est envoyé que le lundi, même si une collecte vérifie un autre jour.
+    assert not _in_window(cfg, "weekly", at(2026, 12, 8, 7, 0))
 
 
 def test_mailer(monkeypatch):
