@@ -130,3 +130,16 @@ def test_fallback_posts_are_reclassified_when_key_available(cfg, conn):
     assert stats["reclassified"] == 1 and stats["llm"] == 1
     assert conn.execute("SELECT classified FROM posts").fetchone()[0] == LLM
     assert conn.execute("SELECT count(*) FROM post_narratives").fetchone()[0] == 0   # rattachement retiré
+
+
+def test_describe_key_never_leaks_secret():
+    from radar.classify import describe_key
+    secret = "sk-ant-api03-" + "S3CR3T" * 16
+    for k in [secret, secret[:40], '"' + secret + '"', "sk-ant-admin01-" + "x" * 90, "sk-ant-api03-abc…xyz", "hello"]:
+        msg = describe_key(k)
+        assert "S3CR3T" not in msg and "xxx" not in msg
+    assert "trop courte" in describe_key(secret[:40])
+    assert "guillemets" in describe_key('"' + secret + '"')
+    assert "administration" in describe_key("sk-ant-admin01-" + "x" * 90)
+    assert "aperçu masqué" in describe_key("sk-ant-api03-abc…xyz")
+    assert "forme correcte" in describe_key(secret)

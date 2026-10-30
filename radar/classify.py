@@ -34,6 +34,23 @@ class BatchLabels(BaseModel):
     results: list[PostLabel]
 
 
+def describe_key(key: str) -> str:
+    """Forme de la clé, sans jamais en révéler la partie secrète (aide au diagnostic)."""
+    if not key.startswith("sk-ant-"):
+        hint = ("guillemets autour de la clé : les retirer" if key[:1] in "\"'" else
+                "ne commence pas par sk-ant- : ce n'est pas une clé API Anthropic")
+        return f"{hint} ({len(key)} caractères)"
+    kind = key.split("-")[2] if key.count("-") >= 3 else "?"
+    if kind.startswith("admin"):
+        return "c'est une clé d'administration (sk-ant-admin…) : créer une clé API standard"
+    if "…" in key or "..." in key or "*" in key:
+        return "la clé contient « … » ou « * » : c'est l'aperçu masqué, pas la clé complète"
+    if len(key) < 100:
+        return f"clé trop courte ({len(key)} caractères, ~108 attendus) : copie incomplète"
+    return (f"forme correcte (sk-ant-{kind}…, {len(key)} caractères) : clé révoquée, ou créée dans "
+            "une autre organisation / un espace de travail désactivé")
+
+
 def _system_prompt(cfg: Config) -> str:
     lines = [f"- {k}: {n.label} (ex. : {', '.join(n.keywords[:6])})" for k, n in cfg.narratives.items()]
     return (
@@ -135,7 +152,8 @@ def classify_pending(conn, cfg: Config, client: anthropic.Anthropic | None = Non
             # Échec du lot : les posts restent en attente et seront retentés au prochain passage.
             log.error("Classification échouée (%s) : %s", type(exc).__name__, exc)
             if isinstance(exc, anthropic.AuthenticationError):
-                stats["error"] = "clé ANTHROPIC_API_KEY refusée par Anthropic (invalid x-api-key) : la recréer"
+                stats["error"] = ("clé ANTHROPIC_API_KEY refusée par Anthropic (invalid x-api-key) : "
+                                  + describe_key(env("ANTHROPIC_API_KEY") or ""))
             stats["failed_batches"] += 1
             if isinstance(exc, anthropic.AuthenticationError):
                 break
